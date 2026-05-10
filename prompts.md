@@ -4,31 +4,45 @@ This file captures the original user prompts and the architectural decisions
 made in response to each, so future teammates can understand *why* the project
 is shaped the way it is. Add new entries to the bottom as the project evolves.
 
+> **House rules for this log:**
+>
+> - **Cleanup of typos & grammar is allowed and encouraged.** When prompts
+>   are typed fast (sometimes racing the assistant to a decision point), the
+>   *meaning* is what matters, not the keystrokes. Capture each prompt with
+>   spelling and grammar tidied so it reads cleanly later. Keep the speaker's
+>   voice intact — don't rephrase, just clean.
+> - **Don't change meaning, scope, or priority** when cleaning. If something
+>   is genuinely ambiguous, capture the prompt as-given and add an editor's
+>   clarification underneath, not in line.
+> - **Bylines are joint when both authors are at the keyboard.** Today's
+>   session was Essen Davis and Hayden Davis sitting side-by-side, so every
+>   entry is attributed to both.
+
 ---
 
 ## Session 1 — 2026-05-10
 
-### Prompt 1 (initial scope) — Essen Davis
+### Prompt 1 (initial scope) — Essen Davis / Hayden Davis
 
-> i would like to create a website that can run as an app on both ios and
-> android without app store. i want access levels admin, supervisor,
+> We would like to create a website that can run as an app on both ios and
+> android without app store pipeline. i want access levels admin, supervisor,
 > maintenance, readonly. the backend should be such that it is php and mysql.
-> it isnt meant to be used as a website but more of an app for maintenance
-> personell to have access to all faa and manufactruer reference documents and
-> to have an ai assistant to help guide maintenacne throught diagnosis and
-> documentation of tasks. the html should have an install icon to install the
-> progressive web app if it isn't already. it should run on chrome wihtout
-> needing that also. there should be a login for more than read only access
-> and that login should track what any employee did to assist with running a
-> problem across multiple shifts. it a support ticket might be created by one
+> It isn't meant to be used as a website but more of an app for maintenance
+> personnel to have access to all public or proprietary FAA and manufactruer reference documents and
+> to have an ai assistant to help guide maintenance through diagnosis and
+> documentation of tasks which include the task of documentation. The html should have an install icon to install the
+> progressive web app (PWA) if it isn't already on that device. It should run on chrome without
+> needing to be installed also. there should be a login for more than read only access
+> and that login should track what any employee did... to assist with running a
+> problem across multiple shifts. A support ticket might be created by one
 > person and picked up by another employee or supervisor and seamlessly
-> continue documenting the tasks. this is just a photo of how i want it to
-> appear. it is for delta and it's subsidiary Endeavor Air. the first
-> airframe will be crj-900 but it will later expand to different boeing and
-> airbus airframes. there should be unit tests built and run at any major
-> change to confirm changes and improvmeents dont break prior function. and
-> it will be run in mamp as long as possible locally, but at some point will
-> migrate to a host, so all database should have backup and restore scripts.
+> continue documenting the tasks or following along with the repair. this is just a photo of how i want it to
+> appear. it is for delta and it's subsidiary Endeavor Air only. the first
+> airframe will be crj-900 but it will later expand to different crj boeing and
+> airbus airframes. There should be unit tests built and run at any major
+> change to confirm changes and improvmeents don't break prior function. and
+> it will be run in MAMP during early development as long as possible locally, but at some point will
+> migrate to a host, so all database should have backup and restore scripts and plan for migration from the start.
 
 (Attached image: dark-themed `CRJ FAULT TRACKER — MAINTENANCE INTELLIGENCE
 SYSTEM` mockup with Delta branding, fleet sidebar, severity/system filters,
@@ -60,9 +74,9 @@ assistant side panel.)
 | How should reference documents (FAA / manufacturer PDFs) be stored? | **Filesystem + DB metadata** — PDFs live under `docs/library/`, MySQL stores metadata (title, ATA chapter, airframe, version) |
 | How real does the data model need to be for v1? | **Full skeleton with seed data** — all tables, realistic CRJ-900 sample matching the mockup, working PWA, login, ticket flow, AI chat, unit tests, backup scripts |
 
-### Prompt 2 — Essen Davis
+### Prompt 2 — Essen Davis / Hayden Davis
 
-> you can clear out anything in mamp right now from a prior project if it is
+> You can clear out anything in MAMP right now from a prior project if anything is
 > in there
 
 **Action taken:** prior MAMP content (`/Applications/MAMP/htdocs/index.php`,
@@ -70,23 +84,23 @@ assistant side panel.)
 `/Users/essendavis/Development/_mamp_backup_<date>/` so the cleanup is
 reversible.
 
-### Prompt 3 — Essen Davis
+### Prompt 3 — Essen Davis / Hayden Davis
 
-> save all my prompts to a prompts.md file so that a second teammember later
-> can see the decsions made as the project develops.
+> save all my prompts to a prompts.md file so that a second teammember sitting next to me now can continue later from his workstation
+> can see the decisions made as the early project develops.
 
 **Action taken:** created this file. **Convention going forward:** every new
 user prompt that changes scope, priorities, or architecture should be added
 here verbatim, with the resulting decision recorded below it.
 
-### Prompt 4 — Essen Davis
+### Prompt 4 — Essen Davis / Hayden Davis
 
 > look and feel shoud come from these colors. but i want the background to
 > be this blue shade gradient with the white text and this sort of look and
 > feel. a pdf should upen separately such that one could have a stack of
 > them open and dragged to different screens or saved or printed seaprateely
 
-### Prompt 4 (clarification) — Essen Davis
+### Prompt 4 (clarification) — Essen Davis / Hayden Davis
 
 > look and feel shoud come from these colors. https://www.delta.com/ but i
 > want the background to be this blue shade gradient with the white text
@@ -109,9 +123,9 @@ palette below was sourced from Delta's published brand identity.)
 | Cards / panels | Translucent navy (`rgba(0,30,72,0.55)`) with a 1px Wave-Blue border at low opacity |
 | PDF viewer | PDFs open in **separate browser windows via `window.open(url,'_blank', 'popup,…')`**. Users can stack multiple, drag windows to other monitors, save/print each independently. Each open call uses a unique window name so each PDF gets its own window. |
 
-### Prompt 5 — Essen Davis
+### Prompt 5 — Essen Davis / Hayden Davis
 
-> i envision most maintenance techs to interact at thier desk on laptop and
+> we envision most maintenance techs to interact at their desk on workstation/laptop and
 > at aircraft side with ipad. they should be able to be logged in to both
 > at the same time and not have that cause any issues. and muliple techs
 > may be on the same support ticket that a maintance or supervisor or admin
@@ -127,10 +141,10 @@ palette below was sourced from Delta's published brand identity.)
 | Audit attribution | `audit_log.user_agent` and `user_sessions.user_agent` make it possible to retroactively tell which device a tech used (laptop vs iPad) for any given action. |
 | Future (v2) | Realtime "who's viewing this ticket right now" presence indicator and live-refresh on event-write. Not in v1. |
 
-### Prompt 6 — Essen Davis
+### Prompt 6 — Essen Davis / Hayden Davis
 
-> a pilot or corprate suite person may be the readonly user. so that is
-> not an afterthought. but some peopel need the data but arent the ones
+> a pilot or corporate suite person may be the readonly user. so that is
+> not an afterthought. but some people need the data, but aren't the ones
 > changing the data.
 
 **Decisions captured:**
@@ -144,7 +158,7 @@ palette below was sourced from Delta's published brand identity.)
 | UX cue | Topbar shows the user's role; readonly users see a "READ ONLY" pill so they understand why mutation buttons are absent. |
 | Seed data | Two real readonly personas added to seed: a CRJ-900 line pilot and a Tech Ops corporate director, alongside the generic `viewer` placeholder. |
 
-### Prompt 7 — Essen Davis
+### Prompt 7 — Essen Davis / Hayden Davis
 
 > when you click on an individual issue i want there to be a tasklist. this
 > tasklist is created blank for each issue by default and both ai and the
@@ -167,13 +181,13 @@ palette below was sourced from Delta's published brand identity.)
 | Position in UI | Right column of the fault detail panel, **above** Diagnostic Questions and Reference Documents (per the prompt). |
 | Audit & handoff | Every task mutation writes an `audit_log` row and, if the task is linked to a ticket, a `ticket_events` entry — so a supervisor reviewing the ticket on the next shift sees exactly what was done. |
 
-### Prompt 8 — Essen Davis
+### Prompt 8 — Essen Davis / Hayden Davis
 
 > the open in maintenance portal button is a dummy for now. expected. but
 > lets make that open a CMMS second page that is focused on just that
 > issue. it should have full cmms level appearance though we are not yet
 > ready to implement that. it is itslef just a skeleton placeholder. it
-> should have features that you think would be helpful from gneeric cmms
+> should have features that you think would be helpful from generic cmms
 > systems like https://upkeep.com/mobile-cmms-maintenance-app/ scrape that
 > website to find capabilities
 
@@ -189,7 +203,7 @@ palette below was sourced from Delta's published brand identity.)
 | Panels | Asset Snapshot (real: affected tails) · Work Orders (real: tickets linked to this fault) · Preventive Maintenance (skeleton) · Parts & Inventory (skeleton) · Time & Labor (skeleton) · Downtime / Reliability (real: from `fault_occurrences`) · Cost Summary (skeleton) · Documents (real) · Activity Timeline (real: from `audit_log` and `ticket_events`) |
 | Authentication | Same session as the main app — opens because the user is already signed in. Pilots / corporate readonly users can view; mutation controls are hidden and the (placeholder) actions are no-ops anyway in v1. |
 
-### Prompt 9 — Essen Davis
+### Prompt 9 — Essen Davis / Hayden Davis
 
 > that tasklist should essentially come from that maintenance portal. i
 > just want it to be visible and expandable on that front page like you
@@ -205,12 +219,12 @@ palette below was sourced from Delta's published brand identity.)
 | Front-page CTA | A "Manage in Maintenance Portal →" link sits at the bottom of the tasks block; clicking it (or the existing OPEN IN MAINTENANCE PORTAL button) opens the CMMS window. |
 | Portal tasks | The Maintenance Portal carries the **full** task interaction: add, AI-suggest, complete (sign-off), block (with holdup reason), reopen, delete. Server-side mutations remain gated on write roles, so readonly users (pilots / corporate) see the portal but can't change anything. |
 
-### Prompt 10 — Essen Davis (PM tracking + return-to-service workflow)
+### Prompt 10 — Essen Davis / Hayden Davis (PM tracking + return-to-service workflow)
 
 > there are alot of preventative maintenance tasks on airplanes that are
-> both calandar time based and hourse in service time based. so those
+> both calandar time based and hours in-service time based. so those
 > should be tracked. for example engines are swapped and have a time in
-> service and a time since a task is performmed. airfrace might have a
+> service and a time since a task is performmed. airframe might have a
 > bunch of things that need to be inspected on a timeframe calendar or hour
 > based. this should be integral to the system. it is for preventative
 > maintenance tracking and inspection just as much as it is for fixing
@@ -235,7 +249,7 @@ palette below was sourced from Delta's published brand identity.)
 | Seed data | All 5 CRJ-900 tails get 2 engines + 1 APU. ~7 representative PM plans (engine borescope @ FH, FCC software audit @ calendar, AFCS servo inspection @ FH, MEL currency @ calendar, etc.). PM items spread across compliance states (overdue, due-soon, current, in-progress, awaiting-inspection) so the dashboard demos meaningfully on first open. |
 | CMMS portal | The PM and Time/Labor cards on the Maintenance Portal stop being skeletons and become real, scoped to the issue's affected tails and their engines/APUs. A supervisor-only "SIGN-OFF QUEUE" card replaces a skeleton card when the logged-in user has `inspection_authority`. |
 
-### Prompt 11 — Essen Davis (admin user management)
+### Prompt 11 — Essen Davis / Hayden Davis (admin user management)
 
 > lets make an admin only ability to manage users and add or remove users
 > and grant access levels and RTS ability
@@ -251,10 +265,10 @@ palette below was sourced from Delta's published brand identity.)
 | Self-protection | Admins cannot deactivate their own account or strip their own admin role through the API (prevents lockout). |
 | Audit | Every admin mutation writes to `audit_log` with action like `user.create`, `user.update`, `user.password_reset`, `user.deactivate`, `user.reactivate` and the target user_id, plus a JSON diff of the changed fields. |
 
-### Prompt 12 — Essen Davis (end-user docs)
+### Prompt 12 — Essen Davis / Hayden Davis (end-user docs)
 
-> make a subfolder in docs which houses a how to use this website
-> document. how to install, how to migrate and how to use for now as
+> make a subfolder in docs which houses a 'how to use this website'
+> document. how to install, how to migrate, and how to use for now as
 > things to cover
 
 **Decisions captured:**
@@ -266,9 +280,9 @@ palette below was sourced from Delta's published brand identity.)
 | Audience | `how-to-install` and `how-to-migrate` target the IT person setting up the system; `how-to-use` targets line maintenance, supervisors, and pilots/corporate readers. |
 | Versioning | Living docs — committed to git so changes track with the code. |
 
-### Prompt 13 — Essen Davis (in-app help)
+### Prompt 13 — Essen Davis / Hayden Davis (in-app help)
 
-> have that how to use document be accessible from a help icon on the
+> have that 'how to use document' be accessible from a help icon on the
 > website
 
 **Decisions captured:**
@@ -280,7 +294,7 @@ palette below was sourced from Delta's published brand identity.)
 | Rendering | A tiny custom Markdown→HTML converter bundled in `src/Markdown.php` (no composer dependency). Handles ATX headings, paragraphs, fenced code, inline code, **bold** / *italic*, links, ordered/unordered lists, GFM tables, blockquotes, and `---` rules — which is what the existing docs use. |
 | Authentication | Help is gated on login. There's no reason to expose it anonymously, and gating keeps the help page consistent with the rest of the app. |
 
-### Prompt 14 — Essen Davis (UpKeep integration map)
+### Prompt 14 — Essen Davis / Hayden Davis (UpKeep integration map)
 
 > what decisions were made to skip or integrate where used when scraping
 > the cmms website from another implementation for a nother industry?
@@ -357,12 +371,12 @@ but clearly tagged `SKELETON · wiring in a later phase`:
 - RTS workflow with `rts_authority` and `inspection_authority` user attributes.
 - Reference-document opening in independent windows so techs can stack PDFs across screens.
 
-### Prompt 15 — Essen Davis (closing-day constraints, 2026-05-10)
+### Prompt 15 — Essen Davis / Hayden Davis (closing-day constraints, 2026-05-10)
 
-> ai should never be able to complate tasks by itself. you can't hold ai
-> accountable for errors. this is a foundational constraint. and yes, we
+> ai should never be able to complete tasks by itself. you can't hold ai
+> accountable for errors fatal or otherwise. this is a foundational constraint. and yes, we
 > work in delta mainenance and this is our work. it is to be shown to
-> superiors and nowehere else if we go ahead. and a ticket that is per
+> superiors and nowehere else if we go ahead, so no legal wrories about the delta logo in the mockup. and a ticket that is per
 > model should exend out and be completed per airframe.
 
 Three closing decisions captured for tomorrow:
@@ -427,11 +441,11 @@ becomes a roll-up view with a per-tail status grid.
 Not implementing tonight — this is a real schema change and deserves
 a sit-down decision. Captured here so we open with it in the morning.
 
-### Prompt 16 — Essen Davis (lift both items into code, now)
+### Prompt 16 — Essen Davis / Hayden Davis (lift both items into code, now)
 
-> no that is not a chew on. and write down. that needs to be in there
-> now. ai never complete is not something just in the log. and ticket
-> model is essnetial. a parent ticket cannot be signed all off at once.
+> no that is not a chew on and write down. that needs to be in there right
+> now: ai never complete rule is not something just in the log and a ticket
+> model is essential. a parent ticket cannot be signed all off at once.
 > each child must be signed off to complete the parent ticket.
 
 > a parent is a model number. and a child is a specific aircraft n
@@ -474,7 +488,7 @@ Both promoted from "decision log" to **enforced in code, this commit**.
   child rollup (`✓ N901XX  · ⏳ N902XX  · ○ N903XX`), so a supervisor
   reading the portal sees fleet-wide status at a glance.
 
-### Prompt 17 — Essen Davis (AI is advisory-only, suggestions need approval)
+### Prompt 17 — Essen Davis / Hayden Davis (AI is advisory-only, suggestions need approval)
 
 > ai is advisory only and can for example sugggest a tasklist that needs
 > to be approved by a user. but it cannot say that tasks are complete or
