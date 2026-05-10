@@ -42,6 +42,14 @@ To add tasks, mark progress, request inspection, or sign off — open the
 **Maintenance Portal** (the red button at the bottom of the issue, or
 the "Manage in portal" link at the top of the tasklist).
 
+> **AI is advisory only.** The AI assistant can *propose* a tasklist
+> but **never** creates live tasks on its own. When you click ✦ AI
+> suggest, you'll see proposals in a review panel — each one needs your
+> explicit **＋ Add** before it becomes a real task. The AI also never
+> marks a task complete, signs off PM, or closes a ticket. Only a
+> certified human is the actor of record on anything that affects
+> airworthiness.
+
 ### Reference documents (PDFs)
 
 Click any reference document. It opens in **its own browser window** so
@@ -70,9 +78,13 @@ This is where you do real work.
 This is where you manage tasks:
 
 - **+ Add task** at the bottom.
-- **✦ AI suggest** at the top right — asks the AI to propose 4–6
-  diagnostic / corrective tasks specific to this fault. Each AI-suggested
-  task is tagged `✦ AI` so you know where it came from.
+- **✦ AI suggest** at the top right — asks the AI to *propose* 4–6
+  diagnostic / corrective tasks specific to this fault. **Proposals
+  appear in a review panel above the tasklist** with **＋ Add** and
+  **✕** buttons per item, plus **Approve all** / **Dismiss all**.
+  **Nothing becomes a real task until you click Add.** Each accepted
+  task is tagged `✦ AI` so you know where it came from, but you (the
+  human) are the `created_by` of record.
 - **Checkbox** to complete a task (see *Sign-off rules* below).
 - **▶** to mark in-progress.
 - **⚠** to mark blocked. You'll be prompted for the holdup reason
@@ -80,6 +92,10 @@ This is where you manage tasks:
   ticket sees that reason on the next refresh.
 - **↺** clears a holdup.
 - **✕** removes a task.
+
+> The AI never moves a task on its own. Every status change requires
+> a human click. The system enforces this server-side — even a bug or
+> a future AI tool call cannot bypass it.
 
 ### Sign-off rules (RTS workflow)
 
@@ -103,9 +119,28 @@ waiting on you. From there you can:
 - **Reject** — bumps it back to *in progress* with the rework reason.
   The original tech sees the reason next time they refresh.
 
+### Tickets — parent (model) and children (per tail)
+
+A ticket is **per fault model** (e.g., "AFCS Autopilot Disconnect on
+CRJ-900") and **extends out per affected airframe** (e.g., one child
+for N901XX, another for N902XX). The structure:
+
+- **Parent ticket** — model-level coordination. No specific tail.
+  Shows the full child rollup at a glance (`✓ N901XX  ⏳ N902XX  ○ N903XX`).
+- **Child ticket** — one per affected tail. Has its own assignee, its
+  own task progress, its own sign-off. Different shifts and techs can
+  be on different children of the same parent simultaneously.
+
+**Closing rule:** a parent ticket **cannot** be closed until **every**
+child is closed (or cancelled). The system blocks early closure and
+returns a `parent_has_open_children` error. Each child must be signed
+off by a tech with RTS authority (or moved through awaiting-inspection
+to a supervisor) before the parent can be retired.
+
 ### Other portal panels
 
-- **Work Orders** — every ticket linked to this issue.
+- **Work Orders** — every ticket linked to this issue. Parents are
+  shown with their child rollup; children show under their parent.
 - **Asset Snapshot** — affected tails with flight hours and cycles.
 - **Preventive Maintenance** — every PM item touching the affected
   tails or their components (engines, APUs). Shows trigger type

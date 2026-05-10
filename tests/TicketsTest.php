@@ -50,8 +50,9 @@ final class TicketsTest extends TestCase
     public function testStatusChangeWritesAuditAndEvent(): void
     {
         $id = \MIS\Tickets::create(3, ['title' => 'Status test']);
-        \MIS\Tickets::setStatus($id, 4, 'in_progress', 'Starting work.');
-        \MIS\Tickets::setStatus($id, 4, 'closed', 'All checks pass.');
+        $mtech2 = \MIS\Db::pdo()->query("SELECT * FROM users WHERE username='mtech2'")->fetch();
+        \MIS\Tickets::setStatus($id, $mtech2, 'in_progress', 'Starting work.');
+        \MIS\Tickets::setStatus($id, $mtech2, 'closed', 'All checks pass.');
 
         $t = \MIS\Tickets::detail($id);
         $this->assertSame('closed', $t['status']);
@@ -67,8 +68,38 @@ final class TicketsTest extends TestCase
     public function testRejectsInvalidStatus(): void
     {
         $id = \MIS\Tickets::create(3, ['title' => 'Bad status']);
-        $this->expectException(\InvalidArgumentException::class, function () use ($id) {
-            \MIS\Tickets::setStatus($id, 3, 'banana');
+        $admin = \MIS\Db::pdo()->query("SELECT * FROM users WHERE username='admin'")->fetch();
+        $this->expectException(\InvalidArgumentException::class, function () use ($id, $admin) {
+            \MIS\Tickets::setStatus($id, $admin, 'banana');
+        });
+    }
+
+    public function testParentCannotCloseUntilChildrenClosed(): void
+    {
+        $admin = \MIS\Db::pdo()->query("SELECT * FROM users WHERE username='admin'")->fetch();
+        // Seed has TKT-2026-0001 (id=1) as parent with two children id=10, 11
+        $this->expectException(\RuntimeException::class, function () use ($admin) {
+            \MIS\Tickets::setStatus(1, $admin, 'closed', 'Try to close early');
+        });
+    }
+
+    public function testParentClosesOnceAllChildrenClosed(): void
+    {
+        $admin = \MIS\Db::pdo()->query("SELECT * FROM users WHERE username='admin'")->fetch();
+        \MIS\Tickets::setStatus(10, $admin, 'closed', 'N901XX done');
+        \MIS\Tickets::setStatus(11, $admin, 'closed', 'N902XX done');
+        \MIS\Tickets::setStatus(1,  $admin, 'closed', 'Roll-up complete');
+        $parent = \MIS\Tickets::detail(1);
+        $this->assertSame('closed', $parent['status']);
+        $this->assertSame(2, $parent['children_total']);
+        $this->assertSame(2, $parent['children_closed']);
+    }
+
+    public function testAiCannotCloseTicket(): void
+    {
+        // Foundational: Auth::assertHumanActor must reject any non-human caller.
+        $this->expectException(\RuntimeException::class, function () {
+            \MIS\Tickets::setStatus(2, ['id' => 0, 'role' => 'ai'], 'closed');
         });
     }
 

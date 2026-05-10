@@ -59,8 +59,19 @@ if ($action === 'status') {
     $id = (int) ($body['ticket_id'] ?? 0);
     $st = (string) ($body['status'] ?? '');
     if ($id < 1 || $st === '') \MIS\Auth::respond(400, ['error' => 'missing_args']);
-    \MIS\Tickets::setStatus($id, (int) $user['id'], $st, $body['note'] ?? null);
+    try {
+        \MIS\Tickets::setStatus($id, $user, $st, $body['note'] ?? null);
+    } catch (\RuntimeException $e) {
+        $code = $e->getMessage() === 'parent_has_open_children' ? 409 : 404;
+        \MIS\Auth::respond($code, ['error' => $e->getMessage()]);
+    }
     ok(['ok' => true]);
+}
+
+if ($action === 'children') {
+    $id = (int) ($_GET['id'] ?? 0);
+    if ($id < 1) \MIS\Auth::respond(400, ['error' => 'missing_id']);
+    ok(['children' => \MIS\Tickets::children($id)]);
 }
 
 \MIS\Auth::respond(404, ['error' => 'unknown_action']);

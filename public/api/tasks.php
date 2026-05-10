@@ -81,6 +81,11 @@ if ($action === 'delete') {
 }
 
 if ($action === 'suggest') {
+    // ADVISORY-ONLY: this endpoint returns AI proposals to the UI but does
+    // NOT insert anything into fault_tasks. A human with write authority
+    // must explicitly approve each proposal via action=add_proposed before
+    // it becomes a real task. Foundational constraint — see prompts.md
+    // Prompts 15, 16, 17.
     require_method('POST');
     $body = json_input();
     $faultId = (int) ($body['fault_id'] ?? 0);
@@ -107,6 +112,10 @@ if ($action === 'suggest') {
 You are the diagnostic assistant for a regional-airline maintenance team. The
 user is asking you to propose a tasklist for working through this fault.
 
+These are PROPOSALS for a human technician to review and approve — they do
+not become live tasks until a certified human explicitly accepts them. Be
+specific and conservative.
+
 Output STRICT JSON ONLY: a top-level array of objects with the keys:
   - "title":  short, line-actionable task (under 120 chars)
   - "rationale": 1-line reason / which document or check this corresponds to
@@ -115,38 +124,54 @@ Each task must be verifiable on the line by a certified tech and reference
 either an ATA chapter, MDC check, manufacturer SB, or AMM step where relevant.
 SYS;
 
-    $messages = [['role' => 'user', 'content' => 'Generate a tasklist for the active fault above.']];
+    $messages = [['role' => 'user', 'content' => 'Propose a tasklist for the active fault above.']];
     $resp = $client->ask($sys, $airframeContext, $messages);
     if (!empty($resp['error'])) {
         \MIS\Auth::respond(502, ['error' => $resp['error'], 'detail' => $resp['detail'] ?? null]);
     }
 
     $text = (string) ($resp['text'] ?? '');
-    $tasks = parseTaskJson($text);
-
-    // Stub fallback: if AI is offline, generate sensible tasks deterministically
-    if (!$tasks) {
-        $tasks = stubTasks($fault);
+    $proposals = parseTaskJson($text);
+    if (!$proposals) {
+        $proposals = stubTasks($fault);
     }
 
-    $created = [];
-    foreach ($tasks as $t) {
-        $title = trim((string) ($t['title'] ?? ''));
-        if ($title === '') continue;
-        $created[] = \MIS\Tasks::add($faultId, (int) $user['id'], $title, [
-            'description' => $t['rationale'] ?? null,
-            'source'      => 'ai',
-        ]);
-    }
     \MIS\Audit::log((int) $user['id'], 'task.suggest', 'fault', (string) $faultId, [
-        'count' => count($created),
-        'live'  => $client->isLive(),
+        'count'    => count($proposals),
+        'titles'   => array_column($proposals, 'title'),
+        'live'     => $client->isLive(),
+        'inserted' => false, // explicit: nothing was written to fault_tasks
     ]);
     ok([
-        'created' => $created,
-        'live'    => $client->isLive(),
-        'tasks'   => \MIS\Tasks::listForFault($faultId),
+        'proposals' => $proposals,
+        'live'      => $client->isLive(),
+        'note'      => 'Proposals are advisory only. A human must approve each via action=add_proposed.',
     ]);
+}
+
+if ($action === 'add_proposed') {
+    // Human approves an AI proposal — only this path inserts an AI-sourced task.
+    require_method('POST');
+    $body = json_input();
+    $faultId = (int) ($body['fault_id'] ?? 0);
+    $title   = trim((string) ($body['title'] ?? ''));
+    if ($faultId < 1 || $title === '') {
+        \MIS\Auth::respond(400, ['error' => 'missing_fields']);
+    }
+    try {
+        $id = \MIS\Tasks::add($faultId, (int) $user['id'], $title, [
+            'description' => $body['rationale'] ?? null,
+            'ticket_id'   => $body['ticket_id'] ?? null,
+            'source'      => 'ai',  // tagged ai for traceability; created_by is the human approver
+        ]);
+    } catch (\InvalidArgumentException $e) {
+        \MIS\Auth::respond(400, ['error' => $e->getMessage()]);
+    }
+    \MIS\Audit::log((int) $user['id'], 'task.approve_ai_proposal', 'task', (string) $id, [
+        'fault_id' => $faultId,
+        'title'    => $title,
+    ]);
+    ok(['task_id' => $id, 'tasks' => \MIS\Tasks::listForFault($faultId)]);
 }
 
 \MIS\Auth::respond(404, ['error' => 'unknown_action']);

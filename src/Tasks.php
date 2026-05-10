@@ -3,8 +3,21 @@ declare(strict_types=1);
 
 namespace MIS;
 
+/**
+ * FOUNDATIONAL CONSTRAINT — DO NOT REMOVE:
+ *
+ *   The AI assistant NEVER completes a task. AI may suggest tasks
+ *   (rows tagged source='ai', always created in status='pending'),
+ *   but every state change to a task requires an authenticated human
+ *   actor of record. Tasks::setStatus calls Auth::assertHumanActor().
+ *
+ *   Source: prompts.md, Prompts 15 & 16. Regulatory and ethical floor —
+ *   you cannot hold an AI accountable for an airworthiness-affecting
+ *   state change; a certified tech or supervisor can.
+ */
 final class Tasks
 {
+    public const AI_CANNOT_COMPLETE = true;
     public const STATUSES = ['pending','in_progress','blocked','awaiting_inspection','complete'];
 
     public static function listForFault(int $faultId): array
@@ -87,6 +100,8 @@ final class Tasks
      */
     public static function setStatus(int $taskId, array $user, string $newStatus, ?string $holdup = null): array
     {
+        // Foundational: no AI / unattributed actor may move a task.
+        Auth::assertHumanActor($user);
         if (!in_array($newStatus, self::STATUSES, true)) {
             throw new \InvalidArgumentException('invalid_status');
         }

@@ -3,8 +3,25 @@ declare(strict_types=1);
 
 namespace MIS;
 
+/**
+ * FOUNDATIONAL CONSTRAINT — DO NOT REMOVE:
+ *
+ *   The AI assistant NEVER closes a ticket. Every Tickets::setStatus call
+ *   asserts a real authenticated human actor.
+ *   See prompts.md, Prompts 15 & 16.
+ *
+ * Parent/child ticket model (prompts.md, Prompt 16):
+ *   - PARENT ticket = model-level work item. parent_id IS NULL,
+ *     tail_id IS NULL.
+ *   - CHILD ticket = per-tail execution. parent_id IS NOT NULL,
+ *     tail_id IS NOT NULL.
+ *   - A parent CANNOT be closed until every child is `closed` or
+ *     `cancelled` (enforced in setStatus).
+ */
 final class Tickets
 {
+    public const AI_CANNOT_COMPLETE = true;
+
     public static function list(array $filter = []): array
     {
         $pdo = Db::pdo();
@@ -60,7 +77,37 @@ final class Tickets
         );
         $events->execute([':id' => $id]);
         $ticket['events'] = $events->fetchAll();
+
+        // Children rollup (only meaningful for parents, but cheap to compute always)
+        $ticket['children'] = self::children((int) $id);
+        $ticket['children_total']  = count($ticket['children']);
+        $ticket['children_closed'] = count(array_filter($ticket['children'], fn($c) => in_array($c['status'], ['closed','cancelled'], true)));
+        $ticket['progress'] = $ticket['children_total'] > 0
+            ? round(($ticket['children_closed'] / $ticket['children_total']) * 100)
+            : null;
         return $ticket;
+    }
+
+    /** Direct children of a parent ticket (per-tail rows). */
+    public static function children(int $parentId): array
+    {
+        $pdo = Db::pdo();
+        $stmt = $pdo->prepare(
+            'SELECT t.id, t.ticket_number, t.status, t.severity, t.assigned_to, t.opened_at, t.closed_at,
+                    at.tail_number, u.full_name AS assigned_to_name
+               FROM tickets t
+               LEFT JOIN aircraft_tails at ON at.id = t.tail_id
+               LEFT JOIN users u ON u.id = t.assigned_to
+              WHERE t.parent_id = :pid
+              ORDER BY at.tail_number'
+        );
+        $stmt->execute([':pid' => $parentId]);
+        return $stmt->fetchAll();
+    }
+
+    public static function isParent(array $ticket): bool
+    {
+        return empty($ticket['parent_id']) && empty($ticket['tail_id']);
     }
 
     public static function create(int $userId, array $input): int
@@ -69,35 +116,57 @@ final class Tickets
         $pdo->beginTransaction();
         try {
             $year = (int) date('Y');
-            $countStmt = $pdo->prepare("SELECT COUNT(*) FROM tickets WHERE ticket_number LIKE :prefix");
-            $countStmt->execute([':prefix' => "TKT-$year-%"]);
-            $next = ((int) $countStmt->fetchColumn()) + 1;
-            $tn = sprintf('TKT-%d-%04d', $year, $next);
+            $parentId = isset($input['parent_id']) ? (int) $input['parent_id'] : null;
+            $tn = self::nextNumber($year, $parentId, $input['tail_id'] ?? null);
 
             $ins = $pdo->prepare(
-                'INSERT INTO tickets (ticket_number, fault_id, tail_id, title, status, severity, created_by, assigned_to)
-                 VALUES (:tn, :fid, :tail, :title, :status, :sev, :uid, :assignee)'
+                'INSERT INTO tickets (ticket_number, parent_id, fault_id, tail_id, title, status, severity, created_by, assigned_to)
+                 VALUES (:tn, :pid, :fid, :tail, :title, :status, :sev, :uid, :assignee)'
             );
             $ins->execute([
                 ':tn'       => $tn,
+                ':pid'      => $parentId,
                 ':fid'      => $input['fault_id'] ?? null,
                 ':tail'     => $input['tail_id']  ?? null,
                 ':title'    => $input['title'],
                 ':status'   => $input['status']   ?? 'open',
                 ':sev'      => $input['severity'] ?? 'MEDIUM',
                 ':uid'      => $userId,
-                ':assignee' => $input['assigned_to'] ?? $userId,
+                ':assignee' => array_key_exists('assigned_to', $input) ? $input['assigned_to'] : $userId,
             ]);
             $ticketId = (int) $pdo->lastInsertId();
 
             self::addEvent($ticketId, $userId, 'created', $input['initial_comment'] ?? 'Ticket opened.', null);
             $pdo->commit();
-            Audit::log($userId, 'ticket.create', 'ticket', (string) $ticketId, ['ticket_number' => $tn]);
+            Audit::log($userId, 'ticket.create', 'ticket', (string) $ticketId, ['ticket_number' => $tn, 'parent_id' => $parentId]);
             return $ticketId;
         } catch (\Throwable $e) {
             $pdo->rollBack();
             throw $e;
         }
+    }
+
+    private static function nextNumber(int $year, ?int $parentId, $tailId): string
+    {
+        $pdo = Db::pdo();
+        if ($parentId === null) {
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM tickets WHERE ticket_number REGEXP :rx");
+            $stmt->execute([':rx' => "^TKT-$year-[0-9]{4}$"]);
+            $next = ((int) $stmt->fetchColumn()) + 1;
+            return sprintf('TKT-%d-%04d', $year, $next);
+        }
+        // Child ticket: append the tail number for readability
+        $tail = '';
+        if ($tailId) {
+            $t = $pdo->prepare('SELECT tail_number FROM aircraft_tails WHERE id = :id');
+            $t->execute([':id' => $tailId]);
+            $tail = (string) $t->fetchColumn();
+        }
+        $parent = $pdo->prepare('SELECT ticket_number FROM tickets WHERE id = :id');
+        $parent->execute([':id' => $parentId]);
+        $parentTn = (string) $parent->fetchColumn();
+        $suffix = $tail !== '' ? $tail : ('C' . random_int(1000, 9999));
+        return $parentTn . '-' . $suffix;
     }
 
     public static function addEvent(int $ticketId, int $userId, string $type, ?string $body, ?array $metadata = null): int
@@ -137,19 +206,43 @@ final class Tickets
         ]);
     }
 
-    public static function setStatus(int $ticketId, int $actingUserId, string $newStatus, ?string $note = null): void
+    /**
+     * Set a ticket's status. Accepts the actor as a user array so we can
+     * enforce Auth::assertHumanActor — the AI cannot move ticket state.
+     *
+     * Parent-ticket constraint: a parent (no tail_id, no parent_id) may
+     * only be closed when every child is `closed` or `cancelled`. Trying
+     * to close early raises `parent_has_open_children`.
+     */
+    public static function setStatus(int $ticketId, $actor, string $newStatus, ?string $note = null): void
     {
+        // Backwards-compat shim: older callers passed an int userId
+        $user = is_array($actor) ? $actor : ['id' => (int) $actor, 'role' => 'admin'];
+        Auth::assertHumanActor($user);
+        $actingUserId = (int) $user['id'];
+
         $valid = ['open','in_progress','on_hold','closed','cancelled'];
         if (!in_array($newStatus, $valid, true)) {
             throw new \InvalidArgumentException('invalid status');
         }
         $pdo = Db::pdo();
-        $cur = $pdo->prepare('SELECT status FROM tickets WHERE id = :id');
+        $cur = $pdo->prepare('SELECT id, status, parent_id, tail_id FROM tickets WHERE id = :id');
         $cur->execute([':id' => $ticketId]);
-        $oldStatus = $cur->fetchColumn();
-        if ($oldStatus === false) {
-            throw new \RuntimeException('Ticket not found');
+        $row = $cur->fetch();
+        if (!$row) throw new \RuntimeException('Ticket not found');
+        $oldStatus = $row['status'];
+
+        // Parent-ticket close gate: only when all children are closed/cancelled
+        $isParent = empty($row['parent_id']) && empty($row['tail_id']);
+        if ($isParent && $newStatus === 'closed') {
+            $kids = $pdo->prepare("SELECT COUNT(*) FROM tickets WHERE parent_id = :pid AND status NOT IN ('closed','cancelled')");
+            $kids->execute([':pid' => $ticketId]);
+            $openKids = (int) $kids->fetchColumn();
+            if ($openKids > 0) {
+                throw new \RuntimeException('parent_has_open_children');
+            }
         }
+
         $sets = ['status = :s'];
         $params = [':s' => $newStatus, ':id' => $ticketId];
         if ($newStatus === 'closed') {

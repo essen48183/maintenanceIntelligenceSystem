@@ -7,9 +7,16 @@ namespace MIS;
  * Preventive maintenance: query PM items with the joins the UI needs,
  * advance lifecycle states (start, complete, sign-off), and surface the
  * supervisor sign-off queue.
+ *
+ * FOUNDATIONAL CONSTRAINT — DO NOT REMOVE:
+ *
+ *   The AI assistant NEVER signs off, completes, or returns to service
+ *   any PM item. Every state change here calls Auth::assertHumanActor().
+ *   See prompts.md, Prompts 15 & 16.
  */
 final class PM
 {
+    public const AI_CANNOT_COMPLETE = true;
     public const STATUSES = ['current','due_soon','overdue','in_progress','awaiting_inspection','complete'];
 
     /** PM items relevant to a list of tail IDs (covers tail-targeted plans AND
@@ -104,6 +111,7 @@ final class PM
 
     public static function start(int $itemId, int $userId, ?int $ticketId = null): array
     {
+        Auth::assertHumanActor(['id' => $userId, 'role' => 'maintenance']);
         $pdo = Db::pdo();
         $pdo->prepare(
             'UPDATE pm_items SET status = "in_progress", assigned_to = :u, ticket_id = :t WHERE id = :id'
@@ -120,6 +128,7 @@ final class PM
      */
     public static function complete(int $itemId, array $user, ?string $notes = null): array
     {
+        Auth::assertHumanActor($user);
         $pdo = Db::pdo();
         $row = self::byId($itemId);
         if (!$row) throw new \RuntimeException('pm_item_not_found');
@@ -156,6 +165,7 @@ final class PM
     /** Supervisor approves a PM item that was awaiting inspection. */
     public static function signOff(int $itemId, array $user, ?string $notes = null): array
     {
+        Auth::assertHumanActor($user);
         if ((int) ($user['inspection_authority'] ?? 0) !== 1 && $user['role'] !== 'admin') {
             throw new \RuntimeException('inspection_authority_required');
         }
@@ -183,6 +193,7 @@ final class PM
     /** Reject an awaiting-inspection submission and send it back. */
     public static function reject(int $itemId, array $user, string $reason): array
     {
+        Auth::assertHumanActor($user);
         if ((int) ($user['inspection_authority'] ?? 0) !== 1 && $user['role'] !== 'admin') {
             throw new \RuntimeException('inspection_authority_required');
         }

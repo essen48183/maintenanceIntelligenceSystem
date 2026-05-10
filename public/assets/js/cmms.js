@@ -22,6 +22,7 @@
     taskStatus: (taskId, status, holdup) => jfetch('api/tasks.php?action=status', {method:'POST', body: JSON.stringify({task_id:taskId, status, holdup: holdup||null})}),
     taskDelete: (taskId) => jfetch('api/tasks.php?action=delete', {method:'POST', body: JSON.stringify({task_id:taskId})}),
     taskSuggest:() => jfetch('api/tasks.php?action=suggest',      {method:'POST', body: JSON.stringify({fault_id:FAULT_ID})}),
+    taskApproveProposal: (proposal) => jfetch('api/tasks.php?action=add_proposed', {method:'POST', body: JSON.stringify({fault_id:FAULT_ID, title: proposal.title, rationale: proposal.rationale || null, ticket_id: TICKET_ID})}),
     pmList:     () => jfetch(`api/pm.php?action=list&fault_id=${FAULT_ID}`),
     pmAwaiting: () => jfetch('api/pm.php?action=awaiting'),
     pmStart:    (id) => jfetch('api/pm.php?action=start',    {method:'POST', body: JSON.stringify({item_id:id})}),
@@ -275,11 +276,84 @@
     if (e.target?.id === 'ai-suggest-btn'){
       const btn = e.target;
       btn.disabled = true; btn.textContent = '✦ thinking…';
-      try { const { tasks } = await api.taskSuggest(); renderTasks(tasks); }
+      try {
+        const { proposals } = await api.taskSuggest();
+        renderProposals(proposals || []);
+      }
       catch (e2){ alert('AI suggest failed: ' + (e2.payload?.error || e2.message)); }
       finally { btn.disabled = false; btn.textContent = '✦ AI suggest'; }
     }
+    // Approve a single AI proposal
+    if (e.target?.classList.contains('proposal-approve')){
+      const card = e.target.closest('.proposal-row');
+      const proposal = JSON.parse(card.dataset.proposal);
+      e.target.disabled = true;
+      try {
+        const { tasks } = await api.taskApproveProposal(proposal);
+        renderTasks(tasks);
+        card.remove();
+        const remaining = document.querySelectorAll('.proposal-row').length;
+        if (remaining === 0) document.getElementById('proposal-panel')?.remove();
+      } catch (e2) {
+        alert('Approve failed: ' + (e2.payload?.error || e2.message));
+      } finally { e.target.disabled = false; }
+    }
+    if (e.target?.classList.contains('proposal-dismiss')){
+      const card = e.target.closest('.proposal-row');
+      card.remove();
+      const remaining = document.querySelectorAll('.proposal-row').length;
+      if (remaining === 0) document.getElementById('proposal-panel')?.remove();
+    }
+    if (e.target?.id === 'proposal-dismiss-all'){
+      document.getElementById('proposal-panel')?.remove();
+    }
+    if (e.target?.id === 'proposal-approve-all'){
+      const cards = Array.from(document.querySelectorAll('.proposal-row'));
+      e.target.disabled = true; e.target.textContent = 'approving…';
+      try {
+        for (const card of cards) {
+          const proposal = JSON.parse(card.dataset.proposal);
+          const { tasks } = await api.taskApproveProposal(proposal);
+          renderTasks(tasks);
+        }
+        document.getElementById('proposal-panel')?.remove();
+      } catch (e2) {
+        alert('Approve-all failed: ' + (e2.payload?.error || e2.message));
+      } finally { if (e.target) { e.target.disabled = false; e.target.textContent = 'Approve all'; } }
+    }
   });
+
+  function renderProposals(proposals){
+    document.getElementById('proposal-panel')?.remove();
+    if (!proposals.length) { alert('AI returned no proposals.'); return; }
+    const panel = document.createElement('div');
+    panel.id = 'proposal-panel';
+    panel.className = 'proposal-panel';
+    panel.innerHTML = `
+      <div class="proposal-head">
+        <strong>✦ AI proposals — review &amp; approve before they become real tasks</strong>
+        <span class="muted small">Advisory only · nothing is added until you approve</span>
+        <div class="proposal-bulk">
+          <button class="btn-tiny" id="proposal-approve-all">Approve all</button>
+          <button class="btn-tiny" id="proposal-dismiss-all">Dismiss all</button>
+        </div>
+      </div>
+      ${proposals.map(p => `
+        <div class="proposal-row" data-proposal='${escAttr(JSON.stringify(p))}'>
+          <div class="proposal-body">
+            <div class="proposal-title">${escHTML(p.title || '')}</div>
+            ${p.rationale ? `<div class="proposal-rationale">${escHTML(p.rationale)}</div>` : ''}
+          </div>
+          <div class="proposal-actions">
+            <button class="btn-tiny proposal-approve" title="Add this task">＋ Add</button>
+            <button class="btn-tiny proposal-dismiss" title="Dismiss this proposal">✕</button>
+          </div>
+        </div>
+      `).join('')}
+    `;
+    const tasksCard = document.querySelector('#task-list')?.closest('.cmms-card-body');
+    if (tasksCard) tasksCard.insertBefore(panel, tasksCard.firstChild);
+  }
 
   // ---------- PM ----------
   async function loadPM(){

@@ -161,4 +161,14 @@ final class TasksTest extends TestCase
         $ids = array_map('intval', array_column($queue, 'id'));
         $this->assertContains($id, $ids);
     }
+
+    public function testAiCannotCompleteTask(): void
+    {
+        // Foundational: AI/unattributed actor cannot move a task. Auth::assertHumanActor enforces.
+        $tech = $this->user('mtech1');
+        $id = \MIS\Tasks::add(2, (int) $tech['id'], 'Real human creates this');
+        $this->expectException(\RuntimeException::class, function () use ($id) {
+            \MIS\Tasks::setStatus($id, ['id' => 0, 'role' => 'ai'], 'complete');
+        });
+    }
 }

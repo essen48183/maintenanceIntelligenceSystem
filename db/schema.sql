@@ -177,11 +177,18 @@ CREATE TABLE fault_occurrences (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Tickets: a maintenance work item that can be picked up across shifts
+-- Parent/child ticket model:
+--   - PARENT ticket = model-level work item (e.g., "AFCS Disconnect on CRJ-900").
+--     parent_id IS NULL, tail_id IS NULL. Cannot be closed until every child is closed.
+--   - CHILD ticket = per-tail execution (e.g., "AFCS Disconnect on N901XX").
+--     parent_id IS NOT NULL, tail_id IS NOT NULL. Can be closed independently
+--     once a tech with RTS authority signs it off.
 CREATE TABLE tickets (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  ticket_number VARCHAR(32) NOT NULL UNIQUE,   -- e.g., TKT-2026-0001
+  ticket_number VARCHAR(32) NOT NULL UNIQUE,   -- e.g., TKT-2026-0001 (parent), TKT-2026-0001-N901XX (child)
+  parent_id INT UNSIGNED DEFAULT NULL,         -- NULL = parent or standalone; FK to tickets.id for children
   fault_id INT UNSIGNED DEFAULT NULL,
-  tail_id INT UNSIGNED DEFAULT NULL,
+  tail_id INT UNSIGNED DEFAULT NULL,           -- NULL on parents (model-level); set on children (specific tail)
   title VARCHAR(255) NOT NULL,
   status ENUM('open','in_progress','on_hold','closed','cancelled') NOT NULL DEFAULT 'open',
   severity ENUM('CRITICAL','HIGH','MEDIUM','LOW') NOT NULL DEFAULT 'MEDIUM',
@@ -191,12 +198,14 @@ CREATE TABLE tickets (
   opened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   closed_at DATETIME DEFAULT NULL,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_ticket_fault FOREIGN KEY (fault_id) REFERENCES fault_catalog(id) ON DELETE SET NULL,
-  CONSTRAINT fk_ticket_tail FOREIGN KEY (tail_id) REFERENCES aircraft_tails(id) ON DELETE SET NULL,
-  CONSTRAINT fk_ticket_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_ticket_assignee FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
-  CONSTRAINT fk_ticket_closer FOREIGN KEY (closed_by) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_ticket_parent   FOREIGN KEY (parent_id)   REFERENCES tickets(id)        ON DELETE CASCADE,
+  CONSTRAINT fk_ticket_fault    FOREIGN KEY (fault_id)    REFERENCES fault_catalog(id)  ON DELETE SET NULL,
+  CONSTRAINT fk_ticket_tail     FOREIGN KEY (tail_id)     REFERENCES aircraft_tails(id) ON DELETE SET NULL,
+  CONSTRAINT fk_ticket_creator  FOREIGN KEY (created_by)  REFERENCES users(id)          ON DELETE RESTRICT,
+  CONSTRAINT fk_ticket_assignee FOREIGN KEY (assigned_to) REFERENCES users(id)          ON DELETE SET NULL,
+  CONSTRAINT fk_ticket_closer   FOREIGN KEY (closed_by)   REFERENCES users(id)          ON DELETE SET NULL,
   INDEX idx_ticket_status (status),
+  INDEX idx_ticket_parent (parent_id),
   INDEX idx_ticket_assignee (assigned_to),
   INDEX idx_ticket_severity (severity)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

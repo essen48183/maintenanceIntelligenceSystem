@@ -88,4 +88,14 @@ final class PMTest extends TestCase
         $this->assertSame('in_progress', $r['status']);
         $this->assertNull($r['awaiting_inspection_at']);
     }
+
+    public function testAiCannotCompletePmItem(): void
+    {
+        // Foundational: AI/unattributed actor cannot complete or sign off a PM item.
+        $pdo = \MIS\Db::pdo();
+        $itemId = (int) $pdo->query("SELECT id FROM pm_items WHERE plan_id=2 ORDER BY id DESC LIMIT 1")->fetchColumn();
+        $this->expectException(\RuntimeException::class, function () use ($itemId) {
+            \MIS\PM::complete($itemId, ['id' => 0, 'role' => 'ai']);
+        });
+    }
 }

@@ -427,6 +427,69 @@ becomes a roll-up view with a per-tail status grid.
 Not implementing tonight — this is a real schema change and deserves
 a sit-down decision. Captured here so we open with it in the morning.
 
+### Prompt 16 — Essen Davis (lift both items into code, now)
+
+> no that is not a chew on. and write down. that needs to be in there
+> now. ai never complete is not something just in the log. and ticket
+> model is essnetial. a parent ticket cannot be signed all off at once.
+> each child must be signed off to complete the parent ticket.
+
+> a parent is a model number. and a child is a specific aircraft n
+> number
+
+Both promoted from "decision log" to **enforced in code, this commit**.
+
+#### A. AI-never-completes — enforced in code
+
+- New `Auth::assertHumanActor($user)` invoked from every state-changing
+  method (`Tasks::setStatus`, `PM::complete`, `PM::signOff`,
+  `PM::reject`, `Tickets::setStatus`). Throws if there is no
+  authenticated human user_id on the call.
+- Class-level constant `AI_CANNOT_COMPLETE = true` and a hard comment
+  block in `src/Tasks.php` and `src/PM.php` so a future contributor
+  reading the source can't miss the rule.
+- Tests cover the constraint: any attempt to complete a task / PM
+  item / ticket without a real authenticated human raises.
+
+#### B. Parent (model) / child (tail) tickets — implemented
+
+- `tickets.parent_id` added (FK to `tickets.id`, nullable).
+- **Parent ticket** = model-level work item. `parent_id` IS NULL,
+  `tail_id` IS NULL, `fault_id` IS NOT NULL.
+- **Child ticket** = specific aircraft N-number. `parent_id` IS NOT
+  NULL, `tail_id` IS NOT NULL, `fault_id` IS NOT NULL (inherited from
+  parent for query convenience).
+- **Closing rule (enforced in `Tickets::setStatus`):** a parent
+  ticket cannot be closed unless **every** child is `closed` or
+  `cancelled`. Attempting to close early raises
+  `parent_has_open_children` (HTTP 409). A child can be closed
+  whenever the tech with authority signs it off.
+- New method `Tickets::children(parentId)` and a rollup field
+  `Tickets::detail()` returns: `children`, `children_total`,
+  `children_closed`, `progress`.
+- Seed data converted: ticket 1 becomes a parent for the CRJ-900
+  AFCS fault, with two children for tails N901XX and N902XX, each
+  with their own assignee, status, and event timeline.
+- CMMS portal **Work Orders** card shows parents with a per-tail
+  child rollup (`✓ N901XX  · ⏳ N902XX  · ○ N903XX`), so a supervisor
+  reading the portal sees fleet-wide status at a glance.
+
+### Prompt 17 — Essen Davis (AI is advisory-only, suggestions need approval)
+
+> ai is advisory only and can for example sugggest a tasklist that needs
+> to be approved by a user. but it cannot say that tasks are complete or
+> generate or complete tasks without human approval and review.
+
+**Behavior change** — closes a gap in the previous implementation.
+
+| Topic | Decision |
+|---|---|
+| Old behavior (now removed) | "✦ AI suggest" inserted tasks directly into `fault_tasks` with `source='ai'`. Wrong — that's the AI *generating* live tasks without explicit human approval. |
+| New behavior | "✦ AI suggest" returns a list of suggestions to the UI **without writing anything to the database**. The UI shows them in a "Suggested by AI — review before adding" panel. A user with write authority then reviews each suggestion and explicitly clicks **Add** (per item) or **Add all reviewed** to commit them. Only at that point do the rows land in `fault_tasks`, and they land with the *user's* `created_by`, source still `ai` for traceability. |
+| Wording in the source code | Method renamed from `suggest` to `propose` in concept; the API action stays `suggest` for stable URLs but the docblock explicitly says "returns proposals; never inserts." |
+| Testing | The smoke check that previously verified "AI suggest creates 5 tasks" now verifies "AI suggest returns 4–6 proposals **and the table count is unchanged**." |
+| Audit | The `task.suggest` audit entry records the proposed titles (so we can later show "the AI proposed X, the human kept Y of them"). |
+
 ---
 
 ## How to use this file

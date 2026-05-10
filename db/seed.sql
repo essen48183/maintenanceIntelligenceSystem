@@ -129,11 +129,19 @@ INSERT INTO fault_occurrences (fault_id, tail_id, occurred_at, flight_number, ph
   (4, 1, '2026-05-03 17:25:00', 'DL4118', 'Cruise', 'ACARS', 'Datalink loss for 4 min'),
   (5, 3, '2026-05-03 22:15:00', 'GROUND', 'Ground', 'AMM',   'APU charger light momentary');
 
--- Sample tickets demonstrating the shift-handoff feature
-INSERT INTO tickets (ticket_number, fault_id, tail_id, title, status, severity, created_by, assigned_to, opened_at) VALUES
-  ('TKT-2026-0001', 1, 1, 'AFCS Autopilot Disconnect — N901XX',  'in_progress', 'CRITICAL', 3, 4, '2026-05-08 10:55:00'),
-  ('TKT-2026-0002', 2, 1, 'CF34-8C5 ITT Exceedance — N901XX',    'open',        'HIGH',     3, 3, '2026-05-08 11:30:00'),
-  ('TKT-2026-0003', 3, 2, 'Spoiler Asymmetry — N902XX',          'on_hold',     'HIGH',     4, 5, '2026-05-06 11:20:00');
+-- Tickets — parent (model-level) + children (per-tail).
+-- Parent TKT-2026-0001 covers the CRJ-900 AFCS fault; children execute on N901XX and N902XX.
+-- TKT-2026-0002 and -0003 demonstrate the legacy single-tail layout (parent_id NULL, tail_id set
+-- — i.e., a standalone ticket — to validate that pattern still works alongside parent/child).
+INSERT INTO tickets (id, ticket_number, parent_id, fault_id, tail_id, title, status, severity, created_by, assigned_to, opened_at) VALUES
+  -- Parent (model-level)
+  (1,  'TKT-2026-0001',         NULL, 1, NULL, 'AFCS Autopilot Disconnect — CRJ-900 (model-level)', 'in_progress', 'CRITICAL', 3, 4, '2026-05-08 10:55:00'),
+  -- Children (per-tail)
+  (10, 'TKT-2026-0001-N901XX',  1,    1, 1,    'AFCS Autopilot Disconnect — N901XX',                'in_progress', 'CRITICAL', 3, 4, '2026-05-08 10:56:00'),
+  (11, 'TKT-2026-0001-N902XX',  1,    1, 2,    'AFCS Autopilot Disconnect — N902XX',                'open',        'CRITICAL', 3, 5, '2026-05-08 11:00:00'),
+  -- Standalone (legacy single-tail) tickets
+  (2,  'TKT-2026-0002',         NULL, 2, 1,    'CF34-8C5 ITT Exceedance — N901XX',                  'open',        'HIGH',     3, 3, '2026-05-08 11:30:00'),
+  (3,  'TKT-2026-0003',         NULL, 3, 2,    'Spoiler Asymmetry — N902XX',                        'on_hold',     'HIGH',     4, 5, '2026-05-06 11:20:00');
 
 -- Ticket events demonstrating multi-user, multi-shift handoff
 INSERT INTO ticket_events (ticket_id, user_id, event_type, body, metadata, created_at) VALUES

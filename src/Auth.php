@@ -140,6 +140,31 @@ final class Auth
         return in_array($user['role'], self::WRITE_ROLES, true);
     }
 
+    /**
+     * Enforce that the actor on a state-changing operation is a real,
+     * authenticated human user. Foundational constraint:
+     *
+     *   The AI assistant NEVER completes a task, signs off a PM item,
+     *   returns an aircraft to service, or closes a ticket. Only humans
+     *   can be held accountable for state changes that affect
+     *   airworthiness.
+     *
+     * Every Tasks/PM/Tickets state-change method calls this before
+     * mutating. If a future change introduces a code path that mutates
+     * without a real user (autonomous job, AI tool call, system process),
+     * this check stops it cold.
+     */
+    public static function assertHumanActor(?array $user): void
+    {
+        if (!$user || empty($user['id']) || (int) $user['id'] < 1) {
+            throw new \RuntimeException('human_actor_required');
+        }
+        // Defence in depth: refuse roles that aren't in the registered set.
+        if (empty($user['role']) || !in_array($user['role'], self::ROLES, true)) {
+            throw new \RuntimeException('human_actor_required');
+        }
+    }
+
     /** Convenience JSON responder (used by API endpoints). */
     public static function respond(int $code, array $payload): void
     {
