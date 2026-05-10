@@ -219,3 +219,7 @@ The schema is portable; nothing assumes MAMP at runtime.
 
 - `prompts.md` — running log of user prompts and the resulting design
   decisions. Read it for the *why* behind the architecture.
+- `docs/guide/` — end-user documentation:
+  - [`how-to-install.md`](docs/guide/how-to-install.md) — first-time MAMP setup
+  - [`how-to-migrate.md`](docs/guide/how-to-migrate.md) — moving off MAMP onto a host
+  - [`how-to-use.md`](docs/guide/how-to-use.md) — for techs, supervisors, admins, pilots, corporate

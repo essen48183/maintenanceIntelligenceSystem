@@ -103,6 +103,8 @@
     document.body.dataset.role = state.user.role;
     const ro = $('#readonly-pill');
     if (ro) ro.hidden = state.user.role !== 'readonly';
+    const gear = $('#admin-gear');
+    if (gear) gear.hidden = state.user.role !== 'admin';
   }
 
   $('#login-form').addEventListener('submit', async (e) => {
@@ -291,7 +293,7 @@
     loadTasks(id);
   }
 
-  // ---------- TASKS ----------
+  // ---------- TASKS (read-only summary; full interaction lives in CMMS portal) ----------
   async function loadTasks(faultId) {
     try {
       const { tasks } = await api.tasksList(faultId);
@@ -305,39 +307,22 @@
   function renderTasks(tasks) {
     const list = $('#task-list');
     if (!list) return;
+    const summary = $('#tasks-summary');
+    if (summary) {
+      const counts = (tasks || []).reduce((a, t) => (a[t.status] = (a[t.status] || 0) + 1, a), {});
+      summary.textContent = (tasks && tasks.length)
+        ? `(${tasks.length} · ${counts.complete || 0} done · ${counts.in_progress || 0} in progress · ${counts.blocked || 0} blocked)`
+        : '(empty)';
+    }
     if (!tasks || !tasks.length) {
-      list.innerHTML = '<div class="muted small task-empty">No tasks yet. Add one below or click <strong>✦ AI suggest</strong> to generate a starting list.</div>';
+      list.innerHTML = '<div class="muted small task-empty">No tasks yet. Open the <a href="#" id="tasks-portal-link-empty">Maintenance Portal</a> to add tasks or generate an AI starter list.</div>';
+      $('#tasks-portal-link-empty')?.addEventListener('click', e => { e.preventDefault(); openCmmsWindow(); });
       return;
     }
-    list.innerHTML = tasks.map(renderTaskRow).join('');
-    // Wire up the per-row controls
-    $$('.task-row', list).forEach(row => {
-      const id = Number(row.dataset.id);
-      const cb = $('.task-check', row);
-      if (cb) cb.addEventListener('click', () => {
-        const target = row.classList.contains('status-complete') ? 'pending' : 'complete';
-        changeTaskStatus(id, target);
-      });
-      $$('.task-action', row).forEach(btn => {
-        btn.addEventListener('click', e => {
-          e.stopPropagation();
-          const next = btn.dataset.status;
-          if (next === 'blocked') {
-            const reason = prompt('What is the holdup? (e.g., awaiting part, awaiting inspection, awaiting NDT)');
-            if (reason === null) return;
-            changeTaskStatus(id, 'blocked', reason);
-          } else if (next === 'delete') {
-            if (!confirm('Remove this task?')) return;
-            deleteTask(id);
-          } else {
-            changeTaskStatus(id, next);
-          }
-        });
-      });
-    });
+    list.innerHTML = tasks.map(renderTaskRowReadOnly).join('');
   }
 
-  function renderTaskRow(t) {
+  function renderTaskRowReadOnly(t) {
     const checked = t.status === 'complete';
     const statusClass = `status-${t.status}`;
     const sourceTag = t.source === 'ai'
@@ -351,83 +336,52 @@
     if (t.status === 'blocked' && t.holdup_reason) {
       holdup = `<span class="task-holdup">⚠ Holdup: <strong>${escapeHTML(t.holdup_reason)}</strong></span>`;
     }
-    const actions = `
-      <div class="task-actions">
-        ${t.status !== 'in_progress' && t.status !== 'complete' ? '<button class="task-action" data-status="in_progress" title="Mark in progress">▶</button>' : ''}
-        ${t.status !== 'blocked'    && t.status !== 'complete' ? '<button class="task-action" data-status="blocked"     title="Mark blocked / holdup">⚠</button>' : ''}
-        ${t.status === 'blocked'    ? '<button class="task-action" data-status="pending"  title="Clear holdup">↺</button>' : ''}
-        <button class="task-action danger" data-status="delete" title="Remove task">✕</button>
-      </div>`;
     return `
-      <div class="task-row ${statusClass}" data-id="${t.id}">
-        <button class="task-check" aria-label="${checked ? 'Mark incomplete' : 'Mark complete'}">${checked ? '✓' : ''}</button>
+      <div class="task-row readonly ${statusClass}" data-id="${t.id}">
+        <span class="task-check static" aria-hidden="true">${checked ? '✓' : ''}</span>
         <div class="task-body">
           <div class="task-title-row">
             <span class="task-title">${escapeHTML(t.title)}</span>
             ${sourceTag}
             <span class="task-status-pill task-${t.status}">${t.status.replace('_',' ')}</span>
           </div>
-          ${t.description ? `<div class="task-desc">${escapeHTML(t.description)}</div>` : ''}
           ${signoff}
           ${holdup}
         </div>
-        ${actions}
       </div>`;
   }
 
-  async function changeTaskStatus(taskId, status, holdup) {
-    try {
-      const { tasks } = await api.taskStatus(taskId, status, holdup);
-      renderTasks(tasks);
-    } catch (e) {
-      alert('Failed: ' + (e.payload?.error || e.message));
+  // Collapse / expand
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (t && t.id === 'tasks-toggle') {
+      const block = document.querySelector('#tasks-block');
+      const open = t.getAttribute('aria-expanded') === 'true';
+      t.setAttribute('aria-expanded', open ? 'false' : 'true');
+      t.textContent = open ? '▸' : '▾';
+      block.classList.toggle('collapsed', open);
     }
-  }
-
-  async function deleteTask(taskId) {
-    try {
-      await api.taskDelete(taskId);
-      loadTasks(state.activeFault);
-    } catch (e) {
-      alert('Failed: ' + (e.payload?.error || e.message));
-    }
-  }
-
-  document.addEventListener('submit', async (e) => {
-    if (e.target && e.target.id === 'task-add') {
+    if (t && (t.id === 'tasks-portal-link' || t.id === 'tasks-portal-link-2')) {
       e.preventDefault();
-      const inp = $('#task-add-input');
-      const title = inp.value.trim();
-      if (!title || !state.activeFault) return;
-      inp.disabled = true;
-      try {
-        const { tasks } = await api.taskAdd(state.activeFault, title);
-        inp.value = '';
-        renderTasks(tasks);
-      } catch (e2) {
-        alert('Failed to add: ' + (e2.payload?.error || e2.message));
-      } finally {
-        inp.disabled = false; inp.focus();
-      }
+      openCmmsWindow();
+    }
+    if (t && t.id === 'open-portal-btn') {
+      openCmmsWindow();
     }
   });
 
-  document.addEventListener('click', async (e) => {
-    if (e.target && e.target.id === 'ai-suggest-btn') {
-      const btn = e.target;
-      if (!state.activeFault) return;
-      btn.disabled = true; btn.textContent = '✦ thinking…';
-      try {
-        const { tasks, live } = await api.taskSuggest(state.activeFault);
-        renderTasks(tasks);
-        if (!live) console.info('[mis] AI suggest used stub responses (set anthropic.api_key to go live).');
-      } catch (e2) {
-        alert('AI suggest failed: ' + (e2.payload?.error || e2.message));
-      } finally {
-        btn.disabled = false; btn.textContent = '✦ AI suggest';
-      }
+  function openCmmsWindow() {
+    if (!state.activeFault) return;
+    const url = `cmms.php?fault_id=${state.activeFault}`;
+    const name = `mis-cmms-${state.activeFault}`;
+    const features = 'popup=yes,resizable=yes,scrollbars=yes,width=1280,height=900,left=80,top=40';
+    const w = window.open(url, name, features);
+    if (!w) {
+      alert('Pop-up blocked. Allow pop-ups for this site to open the Maintenance Portal.');
+      return;
     }
-  });
+    w.focus();
+  }
 
   function renderDetail(f) {
     const lastSeen = f.recent_occurrences[0]?.occurred_at
@@ -472,14 +426,17 @@
         <div>
           <div class="detail-block" id="tasks-block">
             <div class="block-head">
-              <h4>TASKS</h4>
-              <button class="ai-suggest-btn" id="ai-suggest-btn" data-requires-write title="Ask the AI to propose tasks">✦ AI suggest</button>
+              <h4>
+                <button class="tasks-toggle" id="tasks-toggle" aria-expanded="true" title="Show / hide tasklist">▾</button>
+                TASKS
+                <span class="muted small" id="tasks-summary"></span>
+              </h4>
+              <a class="tasks-portal-link" id="tasks-portal-link" href="#" title="Open the Maintenance Portal to manage tasks">Manage in portal ↗</a>
             </div>
-            <div class="task-list" id="task-list"><div class="muted small">Loading…</div></div>
-            <form class="task-add" id="task-add" data-requires-write>
-              <input type="text" id="task-add-input" placeholder="+ Add task (e.g., Pull MDC fault history)" maxlength="500">
-              <button type="submit" class="btn-tiny">Add</button>
-            </form>
+            <div class="task-list readonly" id="task-list"><div class="muted small">Loading…</div></div>
+            <div class="tasks-portal-hint muted small">
+              Tasks are managed in the <a href="#" id="tasks-portal-link-2">Maintenance Portal</a> — open the portal to add, complete, block, or delete.
+            </div>
           </div>
           <div class="detail-block" style="margin-top:14px;">
             <h4>DIAGNOSTIC QUESTIONS</h4>

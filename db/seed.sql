@@ -4,17 +4,19 @@
 
 SET @pwd := '$2y$12$GtZa1hySq3bhoXn9HXYA1.O7Nk57SKFJoL0UZEnyMXpGUiPlllcpS';
 
-INSERT INTO users (employee_id, username, password_hash, full_name, email, role, station, shift) VALUES
-  ('E0001', 'admin',     @pwd, 'System Administrator',  'admin@example.local',     'admin',       'ATL', 'day'),
-  ('E1001', 'jsupervisor', @pwd, 'Jamie Reyes',         'jamie@example.local',     'supervisor',  'ATL', 'day'),
-  ('E2001', 'mtech1',    @pwd, 'Devon Park',            'devon@example.local',     'maintenance', 'ATL', 'day'),
-  ('E2002', 'mtech2',    @pwd, 'Kira Holden',           'kira@example.local',      'maintenance', 'ATL', 'swing'),
-  ('E2003', 'mtech3',    @pwd, 'Marcus Webb',           'marcus@example.local',    'maintenance', 'ATL', 'night'),
-  ('E3001', 'viewer',    @pwd, 'Read Only User',        'viewer@example.local',    'readonly',    'ATL', 'day'),
-  -- Pilot — read access for understanding faults on the line
-  ('E4001', 'rsmith',    @pwd, 'Capt. R. Smith',         'rsmith@example.local',    'readonly',    'ATL', 'day'),
-  -- Corporate Tech Ops — reliability/quality leadership
-  ('E5001', 'qchen',     @pwd, 'Quincy Chen',            'qchen@example.local',     'readonly',    'ATL', 'day');
+-- rts_authority: can self-approve return to service
+-- inspection_authority: can sign off another tech's work
+INSERT INTO users (employee_id, username, password_hash, full_name, email, role, station, shift, rts_authority, inspection_authority) VALUES
+  ('E0001', 'admin',       @pwd, 'System Administrator', 'admin@example.local',  'admin',       'ATL', 'day',   1, 1),
+  ('E1001', 'jsupervisor', @pwd, 'Jamie Reyes',          'jamie@example.local',  'supervisor',  'ATL', 'day',   1, 1),
+  -- mtech1 has been granted RTS authority (senior tech)
+  ('E2001', 'mtech1',      @pwd, 'Devon Park',           'devon@example.local',  'maintenance', 'ATL', 'day',   1, 0),
+  -- mtech2 and mtech3 still need supervisor sign-off for completions
+  ('E2002', 'mtech2',      @pwd, 'Kira Holden',          'kira@example.local',   'maintenance', 'ATL', 'swing', 0, 0),
+  ('E2003', 'mtech3',      @pwd, 'Marcus Webb',          'marcus@example.local', 'maintenance', 'ATL', 'night', 0, 0),
+  ('E3001', 'viewer',      @pwd, 'Read Only User',       'viewer@example.local', 'readonly',    'ATL', 'day',   0, 0),
+  ('E4001', 'rsmith',      @pwd, 'Capt. R. Smith',       'rsmith@example.local', 'readonly',    'ATL', 'day',   0, 0),
+  ('E5001', 'qchen',       @pwd, 'Quincy Chen',          'qchen@example.local',  'readonly',    'ATL', 'day',   0, 0);
 
 -- Airframes
 INSERT INTO airframes (code, manufacturer, model, description) VALUES
@@ -164,3 +166,112 @@ VALUES
   (1, 1, 'Order replacement FCC LRU if SB not yet applied',       'blocked',  'Awaiting part — backorder ETA 48h','user', 30, 4, '2026-05-08 16:30:00', NULL, NULL),
   (1, NULL, 'Inspect pitch and roll servo for binding',           'pending',  NULL,                              'ai',   40, NULL, '2026-05-08 16:35:00', NULL, NULL),
   (1, NULL, 'Cross-check with Primus Elite avionics fault code 47-22 occurrences', 'pending', NULL,              'ai',   50, NULL, '2026-05-08 16:35:00', NULL, NULL);
+
+-- =============================================================================
+-- PM SEED DATA — engines, APUs, plans, and items in mixed compliance states
+-- =============================================================================
+-- Two engines (CF34-8C5) plus one APU per CRJ-900 tail. Tail IDs 1..5 are CRJ-900s.
+INSERT INTO components (component_type, serial_number, position, airframe_id, tail_id, installed_at,         hours_at_install, total_hours, total_cycles, in_service, notes) VALUES
+  ('engine', 'CF34-AAB-N901XX-L', 'L',  1, 1, '2024-11-12 00:00:00',  0,  6420, 4880, 1, 'Original install at delivery'),
+  ('engine', 'CF34-AAB-N901XX-R', 'R',  1, 1, '2025-08-19 00:00:00', 14210, 16340, 11620, 1, 'Mid-life swap from N905XX'),
+  ('apu',    'APU-N901XX',        'AFT',1, 1, '2024-11-12 00:00:00',  0,  3110, 0,    1, NULL),
+  ('engine', 'CF34-AAB-N902XX-L', 'L',  1, 2, '2024-12-04 00:00:00',  0,  6101, 4612, 1, NULL),
+  ('engine', 'CF34-AAB-N902XX-R', 'R',  1, 2, '2024-12-04 00:00:00',  0,  6101, 4612, 1, NULL),
+  ('apu',    'APU-N902XX',        'AFT',1, 2, '2024-12-04 00:00:00',  0,  2950, 0,    1, NULL),
+  ('engine', 'CF34-AAB-N903XX-L', 'L',  1, 3, '2025-02-01 00:00:00',  0,  5400, 4080, 1, NULL),
+  ('engine', 'CF34-AAB-N903XX-R', 'R',  1, 3, '2026-04-15 00:00:00', 18900, 19440, 13900, 1, 'Recent borescope-driven swap'),
+  ('apu',    'APU-N903XX',        'AFT',1, 3, '2025-02-01 00:00:00',  0,  2700, 0,    1, NULL),
+  ('engine', 'CF34-AAB-N904XX-L', 'L',  1, 4, '2025-03-10 00:00:00',  0,  4880, 3700, 1, NULL),
+  ('engine', 'CF34-AAB-N904XX-R', 'R',  1, 4, '2025-03-10 00:00:00',  0,  4880, 3700, 1, NULL),
+  ('apu',    'APU-N904XX',        'AFT',1, 4, '2025-03-10 00:00:00',  0,  2480, 0,    1, NULL),
+  ('engine', 'CF34-AAB-N905XX-L', 'L',  1, 5, '2025-05-22 00:00:00',  0,  4310, 3270, 1, NULL),
+  ('engine', 'CF34-AAB-N905XX-R', 'R',  1, 5, '2025-05-22 00:00:00',  0,  4310, 3270, 1, NULL),
+  ('apu',    'APU-N905XX',        'AFT',1, 5, '2025-05-22 00:00:00',  0,  2200, 0,    1, NULL);
+
+-- PM plans for the CRJ-900 fleet
+INSERT INTO pm_plans (airframe_id, applies_to, ata_chapter, title, description, trigger_type, interval_value, tolerance_value, requires_inspection) VALUES
+  (1, 'engine',   '72-00', 'CF34-8C5 Engine Borescope',           'Hot-section borescope inspection',                'flight_hours',  1000, 100, 1),
+  (1, 'engine',   '72-00', 'CF34-8C5 Oil Sample / SOAP',          'Spectrometric oil analysis sample',                'flight_hours',   400,  40, 0),
+  (1, 'apu',      '49-00', 'APU 250-hour Inspection',             'APU general inspection per AMM 49-00',             'component_hours',250,  25, 1),
+  (1, 'airframe', '22-31', 'FCC Software Audit (SB A-22-31-47)',  'Confirm FCC software per current SB matrix',       'calendar_days',  90,   7, 1),
+  (1, 'airframe', '22-31', 'AFCS Servo Inspection',               'Pitch/roll servo binding & freedom check',         'flight_hours', 2500, 100, 1),
+  (1, 'airframe', NULL,    'MEL Currency Review (AFCS items)',    'Verify open MEL items still within deferral',      'calendar_days',  30,   3, 0),
+  (1, 'airframe', '32-00', 'Landing Gear Lubrication',            'Per AMM 32-00 lubrication chart',                  'flight_cycles', 600,  50, 0);
+
+-- PM items: one row per (plan, target). Spread across compliance states.
+-- Convention: tail_id when target_kind='tail'; component_id when target_kind='component'.
+INSERT INTO pm_items
+  (plan_id, target_kind, tail_id, component_id, last_done_at,         last_done_hours, last_done_cycles,
+   next_due_at,         next_due_hours, next_due_cycles, status, assigned_to, ticket_id,
+   awaiting_inspection_at, awaiting_inspection_by, signed_off_by, signed_off_at, notes)
+VALUES
+  -- ENGINE BORESCOPES (plan 1) — per engine (15 engines via 5 tails x ~2 engines + 5 APUs handled separately).
+  --   N901XX L: due_soon (next due in 60h)
+  (1, 'component', NULL, 1, '2025-12-04 00:00:00', 5500, NULL,
+   NULL,                NULL,           NULL,           'due_soon',  3, NULL,
+   NULL, NULL, 4, '2025-12-04 18:00:00', 'Last performed at 5500 FH; threshold 6500 FH'),
+  --   N901XX R: overdue
+  (1, 'component', NULL, 2, '2025-09-10 00:00:00', 15000, NULL,
+   '2026-04-30 00:00:00', 16000, NULL, 'overdue',   3, NULL,
+   NULL, NULL, NULL, NULL, 'Threshold passed; needs immediate scheduling'),
+  --   N902XX L: current
+  (1, 'component', NULL, 4, '2026-02-22 00:00:00', 5500, NULL,
+   NULL, 6500, NULL, 'current',  NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  --   N902XX R: current
+  (1, 'component', NULL, 5, '2026-02-22 00:00:00', 5500, NULL,
+   NULL, 6500, NULL, 'current',  NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  --   N903XX L: in_progress (mtech2 working)
+  (1, 'component', NULL, 7, '2025-11-30 00:00:00', 4400, NULL,
+   NULL, 5400, NULL, 'in_progress', 4, NULL, NULL, NULL, NULL, NULL, 'Borescope underway'),
+  --   N903XX R: awaiting_inspection (mtech2 finished, supervisor needs to sign off)
+  (1, 'component', NULL, 8, '2025-09-15 00:00:00', 18900, NULL,
+   NULL, 19900, NULL, 'awaiting_inspection', 4, NULL, '2026-05-09 18:00:00', 4, NULL, NULL, 'Findings ready for review'),
+  --   N904XX L: current
+  (1, 'component', NULL, 10, '2026-03-01 00:00:00', 4000, NULL,
+   NULL, 5000, NULL, 'current',  NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  --   N904XX R: current
+  (1, 'component', NULL, 11, '2026-03-01 00:00:00', 4000, NULL,
+   NULL, 5000, NULL, 'current',  NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  --   N905XX L: current
+  (1, 'component', NULL, 13, '2026-04-04 00:00:00', 3500, NULL,
+   NULL, 4500, NULL, 'current',  NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  --   N905XX R: current
+  (1, 'component', NULL, 14, '2026-04-04 00:00:00', 3500, NULL,
+   NULL, 4500, NULL, 'current',  NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+
+  -- OIL SAMPLES (plan 2)
+  (2, 'component', NULL, 1, '2026-04-21 00:00:00', 6020, NULL, NULL, 6420, NULL, 'due_soon', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (2, 'component', NULL, 2, '2026-04-21 00:00:00', 16000, NULL, NULL, 16400, NULL, 'overdue', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (2, 'component', NULL, 4, '2026-05-04 00:00:00', 5800, NULL, NULL, 6200, NULL, 'current',  NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (2, 'component', NULL, 5, '2026-05-04 00:00:00', 5800, NULL, NULL, 6200, NULL, 'current',  NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+
+  -- APU 250h (plan 3) — per APU
+  (3, 'component', NULL, 3,  '2026-03-29 00:00:00', 2900, NULL, NULL, 3150, NULL, 'due_soon',  NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (3, 'component', NULL, 6,  '2026-04-12 00:00:00', 2750, NULL, NULL, 3000, NULL, 'current',   NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (3, 'component', NULL, 9,  '2026-02-18 00:00:00', 2500, NULL, NULL, 2750, NULL, 'overdue',   NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (3, 'component', NULL, 12, '2026-04-10 00:00:00', 2300, NULL, NULL, 2550, NULL, 'current',   NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (3, 'component', NULL, 15, '2026-04-25 00:00:00', 2000, NULL, NULL, 2250, NULL, 'current',   NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+
+  -- FCC SW AUDIT (plan 4) — per tail, calendar
+  (4, 'tail', 1, NULL, '2026-02-08 00:00:00', NULL, NULL, '2026-05-09 00:00:00', NULL, NULL, 'overdue',  NULL, 1,    NULL, NULL, NULL, NULL, 'Tied to active AFCS investigation'),
+  (4, 'tail', 2, NULL, '2026-03-01 00:00:00', NULL, NULL, '2026-05-30 00:00:00', NULL, NULL, 'due_soon', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (4, 'tail', 3, NULL, '2026-04-22 00:00:00', NULL, NULL, '2026-07-21 00:00:00', NULL, NULL, 'current',  NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (4, 'tail', 4, NULL, '2026-03-30 00:00:00', NULL, NULL, '2026-06-28 00:00:00', NULL, NULL, 'current',  NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (4, 'tail', 5, NULL, '2026-04-12 00:00:00', NULL, NULL, '2026-07-11 00:00:00', NULL, NULL, 'current',  NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+
+  -- AFCS Servo (plan 5) — per tail, FH-based; placeholder due_hours
+  (5, 'tail', 1, NULL, '2025-05-15 00:00:00', 18000, NULL, NULL, 20500, NULL, 'in_progress',         3, 1, NULL, NULL, NULL, NULL, 'Tied to AFCS ticket TKT-2026-0001'),
+  (5, 'tail', 2, NULL, '2025-08-04 00:00:00', 16500, NULL, NULL, 19000, NULL, 'current',             NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (5, 'tail', 3, NULL, '2025-11-22 00:00:00', 14000, NULL, NULL, 16500, NULL, 'current',             NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (5, 'tail', 4, NULL, '2025-09-30 00:00:00', 12000, NULL, NULL, 14500, NULL, 'current',             NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (5, 'tail', 5, NULL, '2025-12-08 00:00:00', 10500, NULL, NULL, 13000, NULL, 'current',             NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+
+  -- MEL currency (plan 6) — per tail, calendar
+  (6, 'tail', 1, NULL, '2026-04-22 00:00:00', NULL, NULL, '2026-05-22 00:00:00', NULL, NULL, 'due_soon', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (6, 'tail', 2, NULL, '2026-04-22 00:00:00', NULL, NULL, '2026-05-22 00:00:00', NULL, NULL, 'due_soon', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (6, 'tail', 3, NULL, '2026-04-22 00:00:00', NULL, NULL, '2026-05-22 00:00:00', NULL, NULL, 'due_soon', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+
+  -- Landing gear lube (plan 7) — per tail, FC-based
+  (7, 'tail', 1, NULL, '2026-01-12 00:00:00', NULL, 4280, NULL, NULL, 4880, 'overdue',  NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (7, 'tail', 2, NULL, '2026-02-08 00:00:00', NULL, 4012, NULL, NULL, 4612, 'current',  NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (7, 'tail', 3, NULL, '2026-03-04 00:00:00', NULL, 3480, NULL, NULL, 4080, 'current',  NULL, NULL, NULL, NULL, NULL, NULL, NULL);

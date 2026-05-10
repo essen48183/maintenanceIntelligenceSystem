@@ -70,6 +70,7 @@ $base = rtrim((string)($cfg['app']['base_url'] ?? ''), '/');
       <span class="clock" id="clock"></span>
       <span class="readonly-pill" id="readonly-pill" hidden>READ ONLY</span>
       <button id="install-btn" class="btn btn-ghost" hidden>Install app</button>
+      <a id="admin-gear" class="btn btn-ghost" href="admin.php" title="Manage users (admin only)" hidden>⚙ Manage users</a>
       <span class="user-chip" id="user-chip"></span>
       <button id="logout-btn" class="btn btn-ghost">Sign out</button>
     </div>

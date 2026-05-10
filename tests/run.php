@@ -7,6 +7,8 @@ require_once __DIR__ . '/FaultsTest.php';
 require_once __DIR__ . '/TicketsTest.php';
 require_once __DIR__ . '/AuditTest.php';
 require_once __DIR__ . '/TasksTest.php';
+require_once __DIR__ . '/PMTest.php';
+require_once __DIR__ . '/UsersAdminTest.php';
 
 exit(\MIS\Tests\Runner::run([
     \MIS\Tests\AuthTest::class,
@@ -14,4 +16,6 @@ exit(\MIS\Tests\Runner::run([
     \MIS\Tests\TicketsTest::class,
     \MIS\Tests\AuditTest::class,
     \MIS\Tests\TasksTest::class,
+    \MIS\Tests\PMTest::class,
+    \MIS\Tests\UsersAdminTest::class,
 ]));

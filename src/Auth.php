@@ -112,7 +112,11 @@ final class Auth
             return null;
         }
         $pdo = Db::pdo();
-        $stmt = $pdo->prepare('SELECT id, employee_id, username, full_name, email, role, station, shift FROM users WHERE id = :id AND is_active = 1');
+        $stmt = $pdo->prepare(
+            'SELECT id, employee_id, username, full_name, email, role, station, shift,
+                    rts_authority, inspection_authority
+               FROM users WHERE id = :id AND is_active = 1'
+        );
         $stmt->execute([':id' => $_SESSION['user_id']]);
         $u = $stmt->fetch();
         return $u ?: null;

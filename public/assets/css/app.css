@@ -350,6 +350,28 @@ body[data-role="readonly"] [data-requires-write]{display:none !important;}
 .task-action:hover{background:rgba(0,114,206,0.18);color:var(--text);}
 .task-action.danger:hover{background:rgba(229,25,55,0.20);color:#FFB6C2;}
 
+/* Read-only task summary on the fault detail page (full interaction is in the CMMS portal) */
+.task-list.readonly .task-row{cursor:default;}
+.task-row.readonly .task-check.static{
+  background:rgba(0,0,0,0.30);color:#3DDC97;cursor:default;
+}
+.task-row.readonly .task-check.static:hover{background:rgba(0,0,0,0.30);}
+.task-list.readonly .task-row.status-complete .task-check.static{background:rgba(61,220,151,0.20);border-color:rgba(61,220,151,0.55);}
+
+/* Collapse state */
+#tasks-block.collapsed .task-list,
+#tasks-block.collapsed .tasks-portal-hint{display:none;}
+.tasks-toggle{
+  background:transparent;border:none;color:var(--text);font-size:13px;line-height:1;margin-right:6px;
+  cursor:pointer;
+}
+.tasks-portal-link{
+  font-size:11px;color:#C8E2F7;letter-spacing:0.04em;text-decoration:none;
+}
+.tasks-portal-link:hover{text-decoration:underline;}
+.tasks-portal-hint{margin-top:8px;}
+.tasks-portal-hint a{color:#C8E2F7;text-decoration:underline;}
+
 .task-add{display:flex;gap:6px;margin-top:4px;}
 .task-add input{
   flex:1;padding:8px 10px;border-radius:6px;

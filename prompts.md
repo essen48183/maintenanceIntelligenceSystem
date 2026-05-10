@@ -167,6 +167,105 @@ palette below was sourced from Delta's published brand identity.)
 | Position in UI | Right column of the fault detail panel, **above** Diagnostic Questions and Reference Documents (per the prompt). |
 | Audit & handoff | Every task mutation writes an `audit_log` row and, if the task is linked to a ticket, a `ticket_events` entry — so a supervisor reviewing the ticket on the next shift sees exactly what was done. |
 
+### Prompt 8 — Essen Davis
+
+> the open in maintenance portal button is a dummy for now. expected. but
+> lets make that open a CMMS second page that is focused on just that
+> issue. it should have full cmms level appearance though we are not yet
+> ready to implement that. it is itslef just a skeleton placeholder. it
+> should have features that you think would be helpful from gneeric cmms
+> systems like https://upkeep.com/mobile-cmms-maintenance-app/ scrape that
+> website to find capabilities
+
+**Decisions captured:**
+
+| Topic | Decision |
+|---|---|
+| Behavior | Button opens a **separate window** (`window.open` with a unique window name) scoped to the current fault. Like PDFs, multiple CMMS windows can be open and dragged across screens. |
+| Page | New file `public/cmms.php?fault_id=…&ticket_id=…` — full-page Maintenance Portal layout, not a modal. |
+| Posture | **Skeleton placeholder** with full CMMS appearance. Sections backed by real data where we already have it (work orders / tickets, aircraft tails, downtime from occurrences, documents, audit timeline). Sections without real backing are clearly marked `Skeleton — wiring in a later phase` so nothing reads as fake. |
+| Capabilities scraped from UpKeep's mobile CMMS page | **Work orders** (open / in_progress / on_hold / closed), work requests, **asset & equipment management** (full maintenance history, asset utilization, downtime, depreciation, cost), **preventive maintenance** (recurring schedule, meter-based triggers, compliance), **parts & inventory** (parts tracking, consumption, check-in, multi-location stock, purchasing records), **time & cost tracking** (timer from WO open, labor cost, parts cost, cost-per-WO, budget alerts), **field service** (offline access, mobile-first), **comms** (in-app chat, technician-to-requester comments, push notifications), **analytics** (KPI dashboards, completion metrics, compliance reporting, reliability insights), **platform** (2FA, encryption, desktop-mobile sync, iOS/Android apps). |
+| KPI strip on CMMS page | Open work orders · MTTR · Downtime hours (period) · Parts cost (period) · PM compliance · Last incident |
+| Panels | Asset Snapshot (real: affected tails) · Work Orders (real: tickets linked to this fault) · Preventive Maintenance (skeleton) · Parts & Inventory (skeleton) · Time & Labor (skeleton) · Downtime / Reliability (real: from `fault_occurrences`) · Cost Summary (skeleton) · Documents (real) · Activity Timeline (real: from `audit_log` and `ticket_events`) |
+| Authentication | Same session as the main app — opens because the user is already signed in. Pilots / corporate readonly users can view; mutation controls are hidden and the (placeholder) actions are no-ops anyway in v1. |
+
+### Prompt 9 — Essen Davis
+
+> that tasklist should essentially come from that maintenance portal. i
+> just want it to be visible and expandable on that front page like you
+> have it. to fully interact with it, you gotta go to the maintenance
+> portal
+
+**Decisions captured:**
+
+| Topic | Decision |
+|---|---|
+| Tasks home | The tasklist now **lives in the Maintenance Portal**. The fault detail front page shows a read-only *summary* view that's expandable/collapsible. |
+| Front-page tasks | Visible by default, collapse-toggle on the section header. Each row shows title, source (user/AI), status pill, sign-off attribution, and holdup reason — but no add field, no AI-suggest button, and no per-row action buttons. Counts are shown in the header (e.g., "3 in progress, 1 blocked"). |
+| Front-page CTA | A "Manage in Maintenance Portal →" link sits at the bottom of the tasks block; clicking it (or the existing OPEN IN MAINTENANCE PORTAL button) opens the CMMS window. |
+| Portal tasks | The Maintenance Portal carries the **full** task interaction: add, AI-suggest, complete (sign-off), block (with holdup reason), reopen, delete. Server-side mutations remain gated on write roles, so readonly users (pilots / corporate) see the portal but can't change anything. |
+
+### Prompt 10 — Essen Davis (PM tracking + return-to-service workflow)
+
+> there are alot of preventative maintenance tasks on airplanes that are
+> both calandar time based and hourse in service time based. so those
+> should be tracked. for example engines are swapped and have a time in
+> service and a time since a task is performmed. airfrace might have a
+> bunch of things that need to be inspected on a timeframe calendar or hour
+> based. this should be integral to the system. it is for preventative
+> maintenance tracking and inspection just as much as it is for fixing
+> reported anomolies and fixing broken things to return to service. in
+> some cases the maintencne worker themselves can approve a return to
+> service, but in other cases, they need to say it is done and ready to
+> be inspected. so each user needs to be able to flag something that
+> comes up to thier supervisor such that they know it is complete or
+> awaiting their inspection/signoff.
+
+**Decisions captured:**
+
+| Topic | Decision |
+|---|---|
+| PM is integral, not optional | PM tracking is a **co-equal pillar** with fault triage. The system serves both: returning broken aircraft to service AND keeping airworthy aircraft compliant with scheduled maintenance. |
+| Tracked components | Aircraft tails *and* serial-numbered components (engines, APUs, landing gear, etc.). Engines especially: when an engine is swapped, its time-in-service follows the engine, not the airframe. PM items on the engine reset only on engine swap. New table `components` carries `installed_at`, `hours_at_install`, `total_hours`, `total_cycles`, `in_service`. |
+| PM plan model | `pm_plans` define the *what*: title, applicable scope (airframe / engine / apu / landing_gear), trigger type (`calendar_days` / `flight_hours` / `flight_cycles` / `component_hours`), interval value, tolerance, and `requires_inspection` flag (whether a supervisor sign-off is mandatory regardless of who completes the work). |
+| PM compliance model | `pm_items` are the *instances*: one per (plan, target). Carry `last_done_at`, `last_done_hours`, `last_done_cycles`, `next_due_at`, `next_due_hours`, `next_due_cycles`, current status (`current` / `due_soon` / `overdue` / `in_progress` / `awaiting_inspection` / `complete`), assignee, and full sign-off attribution (who, when). |
+| RTS authority | Two new boolean attributes on users: `rts_authority` (can self-approve return to service) and `inspection_authority` (can sign off another tech's work). Admins and supervisors get both by default; maintenance techs can be granted `rts_authority` per individual; readonly users get neither. |
+| Status flow | Tasks gain an `awaiting_inspection` state. Completing a task: if the task `requires_inspection` OR the acting user lacks `rts_authority`, the task transitions to `awaiting_inspection` (NOT `complete`) and the supervisor's sign-off queue lights up. From `awaiting_inspection`, a user with `inspection_authority` signs off → `complete`. The audit log records both events with both users named. |
+| Flag-to-supervisor | The "complete" button shows different copy based on the user's authority: techs without RTS see "Mark complete · awaiting inspection"; techs with RTS see "Sign off & close". A supervisor's CMMS portal shows a "SIGN-OFF QUEUE" panel listing every item awaiting them across all tails and faults. |
+| Seed data | All 5 CRJ-900 tails get 2 engines + 1 APU. ~7 representative PM plans (engine borescope @ FH, FCC software audit @ calendar, AFCS servo inspection @ FH, MEL currency @ calendar, etc.). PM items spread across compliance states (overdue, due-soon, current, in-progress, awaiting-inspection) so the dashboard demos meaningfully on first open. |
+| CMMS portal | The PM and Time/Labor cards on the Maintenance Portal stop being skeletons and become real, scoped to the issue's affected tails and their engines/APUs. A supervisor-only "SIGN-OFF QUEUE" card replaces a skeleton card when the logged-in user has `inspection_authority`. |
+
+### Prompt 11 — Essen Davis (admin user management)
+
+> lets make an admin only ability to manage users and add or remove users
+> and grant access levels and RTS ability
+
+**Decisions captured:**
+
+| Topic | Decision |
+|---|---|
+| Surface | Dedicated admin page `public/admin.php` linked from a gear icon in the topbar that is **visible only to users with role=admin**. Accessible only over the admin's authenticated session. |
+| Capabilities | Add user · update user fields (role, station, shift, rts_authority, inspection_authority, email, full_name) · reset password · deactivate / reactivate (soft delete via `is_active=0`) · list all users with current authority flags · audit history of every admin action |
+| Hard delete | NOT supported. Users with audit history must remain in the table to preserve attribution. Deactivation hides them from picklists and prevents login but keeps their past actions intact. |
+| Endpoint | New API `public/api/users.php` with `list / create / update / reset_password / deactivate / reactivate` actions. Every endpoint enforces `Auth::require(['admin'])`; non-admins (including supervisors) get 403. |
+| Self-protection | Admins cannot deactivate their own account or strip their own admin role through the API (prevents lockout). |
+| Audit | Every admin mutation writes to `audit_log` with action like `user.create`, `user.update`, `user.password_reset`, `user.deactivate`, `user.reactivate` and the target user_id, plus a JSON diff of the changed fields. |
+
+### Prompt 12 — Essen Davis (end-user docs)
+
+> make a subfolder in docs which houses a how to use this website
+> document. how to install, how to migrate and how to use for now as
+> things to cover
+
+**Decisions captured:**
+
+| Topic | Decision |
+|---|---|
+| Location | `docs/guide/` (peer of `docs/library/`). The `library/` subfolder remains for FAA / manufacturer PDFs; the `guide/` subfolder is for human-readable end-user docs. |
+| Files | `docs/guide/how-to-install.md` · `docs/guide/how-to-migrate.md` · `docs/guide/how-to-use.md` (plus an index `docs/guide/README.md`). |
+| Audience | `how-to-install` and `how-to-migrate` target the IT person setting up the system; `how-to-use` targets line maintenance, supervisors, and pilots/corporate readers. |
+| Versioning | Living docs — committed to git so changes track with the code. |
+
 ---
 
 ## How to use this file

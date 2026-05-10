@@ -7,6 +7,14 @@ require_once __DIR__ . '/Harness.php';
 
 final class TasksTest extends TestCase
 {
+    /** Fetch a seed user by username. */
+    private function user(string $username): array
+    {
+        $stmt = \MIS\Db::pdo()->prepare('SELECT * FROM users WHERE username = :u');
+        $stmt->execute([':u' => $username]);
+        return $stmt->fetch() ?: [];
+    }
+
     public function testSeedTasksLoaded(): void
     {
         $tasks = \MIS\Tasks::listForFault(1);
@@ -37,54 +45,96 @@ final class TasksTest extends TestCase
         });
     }
 
-    public function testCompleteRecordsSignoff(): void
+    public function testRtsTechCanSelfSignoff(): void
     {
-        $id = \MIS\Tasks::add(2, 3, 'Step to be signed off');
-        $task = \MIS\Tasks::setStatus($id, 4, 'complete');
+        // mtech1 has rts_authority=1; completing should land in 'complete'.
+        $rtsTech = $this->user('mtech1');
+        $id = \MIS\Tasks::add(2, (int) $rtsTech['id'], 'Step to be signed off');
+        $task = \MIS\Tasks::setStatus($id, $rtsTech, 'complete');
         $this->assertSame('complete', $task['status']);
-        $this->assertSame(4, (int) $task['completed_by']);
+        $this->assertSame((int) $rtsTech['id'], (int) $task['completed_by']);
         $this->assertNotNull($task['completed_at']);
+    }
+
+    public function testTechWithoutRtsRoutesToInspection(): void
+    {
+        // mtech2 has rts_authority=0; completing should re-route to awaiting_inspection.
+        $tech = $this->user('mtech2');
+        $id = \MIS\Tasks::add(2, (int) $tech['id'], 'Step needs sup signoff');
+        $task = \MIS\Tasks::setStatus($id, $tech, 'complete');
+        $this->assertSame('awaiting_inspection', $task['status'], 'no RTS authority → flagged for inspection');
+        $this->assertSame((int) $tech['id'], (int) $task['awaiting_inspection_by']);
+        $this->assertNotNull($task['awaiting_inspection_at']);
+        $this->assertNull($task['completed_by']);
+    }
+
+    public function testSupervisorSignsOffAwaitingInspection(): void
+    {
+        $tech = $this->user('mtech2');
+        $sup  = $this->user('jsupervisor'); // inspection_authority=1
+        $id = \MIS\Tasks::add(2, (int) $tech['id'], 'Awaiting sup signoff');
+        \MIS\Tasks::setStatus($id, $tech, 'complete'); // → awaiting_inspection
+        $task = \MIS\Tasks::setStatus($id, $sup, 'complete'); // sup signs off
+        $this->assertSame('complete', $task['status']);
+        $this->assertSame((int) $sup['id'], (int) $task['completed_by']);
+    }
+
+    public function testTechCannotSignOffSomeoneElsesWork(): void
+    {
+        $tech1 = $this->user('mtech2');
+        $tech2 = $this->user('mtech3'); // also no inspection_authority
+        $id = \MIS\Tasks::add(2, (int) $tech1['id'], 'X');
+        \MIS\Tasks::setStatus($id, $tech1, 'complete'); // → awaiting_inspection
+        $this->expectException(\RuntimeException::class, function () use ($id, $tech2) {
+            \MIS\Tasks::setStatus($id, $tech2, 'complete');
+        });
     }
 
     public function testReopeningClearsSignoff(): void
     {
-        $id = \MIS\Tasks::add(2, 3, 'Step to reopen');
-        \MIS\Tasks::setStatus($id, 4, 'complete');
-        $task = \MIS\Tasks::setStatus($id, 4, 'pending');
+        $rtsTech = $this->user('mtech1');
+        $id = \MIS\Tasks::add(2, (int) $rtsTech['id'], 'Step to reopen');
+        \MIS\Tasks::setStatus($id, $rtsTech, 'complete');
+        $task = \MIS\Tasks::setStatus($id, $rtsTech, 'pending');
         $this->assertSame('pending', $task['status']);
         $this->assertNull($task['completed_by']);
         $this->assertNull($task['completed_at']);
+        $this->assertNull($task['awaiting_inspection_by']);
     }
 
     public function testBlockedCarriesHoldupReason(): void
     {
-        $id = \MIS\Tasks::add(2, 3, 'Order replacement');
-        $task = \MIS\Tasks::setStatus($id, 3, 'blocked', 'Awaiting part — backorder ETA 72h');
+        $tech = $this->user('mtech1');
+        $id = \MIS\Tasks::add(2, (int) $tech['id'], 'Order replacement');
+        $task = \MIS\Tasks::setStatus($id, $tech, 'blocked', 'Awaiting part — backorder ETA 72h');
         $this->assertSame('blocked', $task['status']);
         $this->assertSame('Awaiting part — backorder ETA 72h', $task['holdup_reason']);
     }
 
     public function testUnblockingClearsHoldup(): void
     {
-        $id = \MIS\Tasks::add(2, 3, 'Order replacement');
-        \MIS\Tasks::setStatus($id, 3, 'blocked', 'Awaiting inspection');
-        $task = \MIS\Tasks::setStatus($id, 3, 'in_progress');
+        $tech = $this->user('mtech1');
+        $id = \MIS\Tasks::add(2, (int) $tech['id'], 'Order replacement');
+        \MIS\Tasks::setStatus($id, $tech, 'blocked', 'Awaiting inspection');
+        $task = \MIS\Tasks::setStatus($id, $tech, 'in_progress');
         $this->assertSame('in_progress', $task['status']);
         $this->assertNull($task['holdup_reason']);
     }
 
     public function testRejectsInvalidStatus(): void
     {
-        $id = \MIS\Tasks::add(2, 3, 'X');
-        $this->expectException(\InvalidArgumentException::class, function () use ($id) {
-            \MIS\Tasks::setStatus($id, 3, 'banana');
+        $tech = $this->user('mtech1');
+        $id = \MIS\Tasks::add(2, (int) $tech['id'], 'X');
+        $this->expectException(\InvalidArgumentException::class, function () use ($id, $tech) {
+            \MIS\Tasks::setStatus($id, $tech, 'banana');
         });
     }
 
     public function testStatusChangeWritesAudit(): void
     {
-        $id = \MIS\Tasks::add(2, 3, 'Auditable task');
-        \MIS\Tasks::setStatus($id, 4, 'complete');
+        $tech = $this->user('mtech1');
+        $id = \MIS\Tasks::add(2, (int) $tech['id'], 'Auditable task');
+        \MIS\Tasks::setStatus($id, $tech, 'complete');
         $rows = \MIS\Audit::recentForTarget('task', (string) $id, 10);
         $actions = array_column($rows, 'action');
         $this->assertContains('task.create', $actions);
@@ -93,13 +143,22 @@ final class TasksTest extends TestCase
 
     public function testTaskTiedToTicketRecordsTicketEvent(): void
     {
-        // Ticket 1 in seed is linked to fault 1
-        $id = \MIS\Tasks::add(1, 4, 'Bench-test FCC L', ['ticket_id' => 1]);
-        \MIS\Tasks::setStatus($id, 4, 'complete');
+        $tech = $this->user('mtech1');
+        $id = \MIS\Tasks::add(1, (int) $tech['id'], 'Bench-test FCC L', ['ticket_id' => 1]);
+        \MIS\Tasks::setStatus($id, $tech, 'complete');
         $events = \MIS\Tickets::detail(1)['events'];
-        // The most recent events should include task add (comment) and task complete (comment)
         $bodies = implode(' || ', array_column($events, 'body'));
         $this->assertTrue(str_contains($bodies, 'Bench-test FCC L'), 'task creation should appear in ticket timeline');
         $this->assertTrue(str_contains($bodies, 'completed'), 'task completion should appear in ticket timeline');
+    }
+
+    public function testAwaitingInspectionQueueListsFlagged(): void
+    {
+        $tech = $this->user('mtech2');
+        $id = \MIS\Tasks::add(2, (int) $tech['id'], 'Item that should appear in queue');
+        \MIS\Tasks::setStatus($id, $tech, 'complete'); // → awaiting_inspection
+        $queue = \MIS\Tasks::awaitingInspection();
+        $ids = array_map('intval', array_column($queue, 'id'));
+        $this->assertContains($id, $ids);
     }
 }

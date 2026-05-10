@@ -45,11 +45,15 @@ if ($action === 'status') {
         \MIS\Auth::respond(400, ['error' => 'missing_fields']);
     }
     try {
-        $task = \MIS\Tasks::setStatus($taskId, (int) $user['id'], $status, $body['holdup'] ?? null);
+        $task = \MIS\Tasks::setStatus($taskId, $user, $status, $body['holdup'] ?? null);
     } catch (\InvalidArgumentException $e) {
         \MIS\Auth::respond(400, ['error' => $e->getMessage()]);
     } catch (\RuntimeException $e) {
-        \MIS\Auth::respond(404, ['error' => $e->getMessage()]);
+        $msg = $e->getMessage();
+        if ($msg === 'inspection_authority_required') {
+            \MIS\Auth::respond(403, ['error' => $msg]);
+        }
+        \MIS\Auth::respond(404, ['error' => $msg]);
     }
     ok(['task' => $task, 'tasks' => \MIS\Tasks::listForFault((int) $task['fault_id'])]);
 }
