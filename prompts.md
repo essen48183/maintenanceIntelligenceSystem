@@ -266,6 +266,97 @@ palette below was sourced from Delta's published brand identity.)
 | Audience | `how-to-install` and `how-to-migrate` target the IT person setting up the system; `how-to-use` targets line maintenance, supervisors, and pilots/corporate readers. |
 | Versioning | Living docs — committed to git so changes track with the code. |
 
+### Prompt 13 — Essen Davis (in-app help)
+
+> have that how to use document be accessible from a help icon on the
+> website
+
+**Decisions captured:**
+
+| Topic | Decision |
+|---|---|
+| Surface | A `?` (help) icon in the topbar, visible to **every** authenticated user. Opens `public/help.php` in its own window (same `window.open` pattern as PDFs and the CMMS portal — drag to a second screen, keep open while you work). |
+| Content | Renders the existing `docs/guide/*.md` files. The page has a small tab strip — **Use** (default, what the prompt asked for), **Install**, **Migrate** — so the IT-leaning docs are discoverable too without crowding the user-facing page. |
+| Rendering | A tiny custom Markdown→HTML converter bundled in `src/Markdown.php` (no composer dependency). Handles ATX headings, paragraphs, fenced code, inline code, **bold** / *italic*, links, ordered/unordered lists, GFM tables, blockquotes, and `---` rules — which is what the existing docs use. |
+| Authentication | Help is gated on login. There's no reason to expose it anonymously, and gating keeps the help page consistent with the rest of the app. |
+
+### Prompt 14 — Essen Davis (UpKeep integration map)
+
+> what decisions were made to skip or integrate where used when scraping
+> the cmms website from another implementation for a nother industry?
+
+UpKeep is a general-facilities CMMS (manufacturing, property, hospitality);
+aviation maintenance has stricter regulation, different asset types, and
+component-aware time tracking. Here is the explicit map of which UpKeep
+capabilities were integrated, integrated-with-an-aviation-twist, left as
+visible skeleton, or deliberately skipped.
+
+#### Integrated as-is
+
+| UpKeep capability | MIS implementation |
+|---|---|
+| Work orders (create / manage / complete) | `tickets` table + `ticket_events` timeline |
+| Status updates and comments | `ticket_events` (comment / status_changed / reassigned / handoff) |
+| Asset tracking | `aircraft_tails` + `components` |
+| Maintenance history accessible on mobile | Audit log + ticket events; full read-only access on iPad / Chrome PWA |
+| Asset downtime monitoring | Computed from `fault_occurrences` and surfaced on the CMMS portal |
+| Asset reliability insights | 14-day occurrence trend chart |
+| Preventive maintenance scheduling | `pm_plans` + `pm_items` (first-class pillar, not a side feature) |
+| Recurring work order setup | Each PM plan generates an item per target with `next_due_at / next_due_hours / next_due_cycles` |
+| PM compliance tracking | `pm_items.status` (current / due_soon / overdue / in_progress / awaiting_inspection / complete) + KPI counts |
+| KPI dashboards | KPI strips on both the main app and the CMMS portal |
+| Completion metrics | MTTR (mean time to closed), occurrence counts |
+| Compliance reporting | PM status counts on the portal; per-tail snapshot |
+| Mobile-first / iOS / Android | PWA — installable from Chrome on Android and Safari "Add to Home Screen" on iOS; same install button on desktop Chrome |
+| Desktop-mobile sync | Single PHP+MySQL backend; multi-device sessions on the same user (laptop + iPad simultaneously) |
+| Encryption / data security | HTTPS-ready, `cookie_secure`, hash-based passwords (bcrypt cost 12) |
+| Unlimited "requesters" (read-only users) | Readonly role is first-class; pilots and corporate users covered |
+| Technician-to-requester comments | Ticket comments visible to all roles (readonly users see them) |
+
+#### Integrated with an aviation-specific twist
+
+| UpKeep capability | MIS twist |
+|---|---|
+| Meter-reading-based triggers | Split into four aviation-specific trigger types: `calendar_days`, `flight_hours`, `flight_cycles`, `component_hours`. Component-hours are critical because engines/APUs follow the part, not the airframe, on swap. |
+| Asset utilization tracking | Component records carry their own `total_hours` / `total_cycles` separate from the tail's, so a swapped engine's PM history doesn't reset. |
+| Status-update notifications | Replaced with **RTS authority + sign-off queue** — a regulatory necessity, not just a comms feature. Tasks/PM items completed by techs without `rts_authority` route to `awaiting_inspection`; supervisors with `inspection_authority` sign off or reject. UpKeep has nothing equivalent. |
+| Team alignment | Shift handoff is structured: ticket events tag `shift_handoff: true` with from/to user IDs so the next shift sees the full chronology when they open the ticket. |
+| Asset categorization | ATA chapters carried on faults, plans, and documents — universal aviation taxonomy (UpKeep doesn't ship with aviation taxonomies). |
+
+#### Visible skeleton — wiring planned but not v1
+
+These are present in the CMMS portal so the layout matches a real CMMS,
+but clearly tagged `SKELETON · wiring in a later phase`:
+
+| Capability | Why deferred |
+|---|---|
+| Parts & Inventory | Aviation parts are lifed and serialized; the schema can't be a copy of UpKeep's. Needs its own design (life limits, traceability tags, certs) before implementation. |
+| Time & Labor (timer, hours logged) | Real labor recording requires payroll/dispatch integration; placeholder is fine for v1. |
+| Cost summary | Depends on parts + labor being real. |
+| Photos & signatures | Mobile capture is straightforward but needs storage policy and signature canvas — meaningful chunk of work, deferred. |
+
+#### Deliberately skipped (not the right fit)
+
+| UpKeep capability | Why skipped |
+|---|---|
+| Asset depreciation / financial tracking | Airline finance lives in a separate system (M&E or ERP). Belongs there, not in a maintenance-tech app. |
+| Budget monitoring and alerts | Same reason — financial scope, not a tech's flow. |
+| Real-time IoT data integration | The aviation analogue (ACARS, FOQA, CMS streams) is a major integration effort. v1 leaves placeholder columns and ingestion is a separate project. |
+| In-app team chat | Slack / Teams already serve this need at most airlines; a new chat surface adds friction. Ticket comments cover async coordination. |
+| Push notifications | Requires service-worker push + per-user subscription management + a delivery service. Deferred until users ask for it. |
+| Location-based field service (GPS routing) | A tail number plus station is the operational coordinate; lat/long routing is overkill. |
+| Hard delete of assets / users | Audit-log integrity matters. Soft-delete (`is_active=0`) only. |
+| Two-factor auth | Real production deploy will sit behind the airline's SSO / MFA; baking in our own 2FA before then is wasted work. |
+
+#### Added beyond UpKeep (aviation-specific, not in their scrape)
+
+- AI diagnostic assistant tied to fault context (Anthropic Messages API, prompt-cached system + airframe context).
+- Multi-airframe schema (CRJ-900 first, designed for Boeing/Airbus expansion without a rewrite).
+- Component-swap-aware time-in-service.
+- ATA chapter taxonomy on every fault, document, and plan.
+- RTS workflow with `rts_authority` and `inspection_authority` user attributes.
+- Reference-document opening in independent windows so techs can stack PDFs across screens.
+
 ---
 
 ## How to use this file

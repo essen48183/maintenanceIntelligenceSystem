@@ -449,5 +449,12 @@
     } finally { btn.disabled = false; }
   }
 
+  document.getElementById('cmms-help-btn')?.addEventListener('click', () => {
+    const w = window.open('help.php?doc=use', 'mis-help',
+      'popup=yes,resizable=yes,scrollbars=yes,width=920,height=900,left=160,top=40');
+    if (!w) alert('Pop-up blocked.');
+    else w.focus();
+  });
+
   loadAll().catch(e => alert('Load failed: ' + e.message));
 })();

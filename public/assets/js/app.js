@@ -637,6 +637,13 @@
     deferredPrompt = e;
     $('#install-btn').hidden = false;
   });
+  $('#help-btn')?.addEventListener('click', () => {
+    const w = window.open('help.php?doc=use', 'mis-help',
+      'popup=yes,resizable=yes,scrollbars=yes,width=920,height=900,left=160,top=40');
+    if (!w) alert('Pop-up blocked. Allow pop-ups for this site to open the help window.');
+    else w.focus();
+  });
+
   $('#install-btn').addEventListener('click', async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();

@@ -56,6 +56,7 @@ if (!$fault) {
     <?php if ($user['role'] === 'readonly'): ?>
       <span class="readonly-pill">READ ONLY</span>
     <?php endif; ?>
+    <button id="cmms-help-btn" class="btn btn-ghost help-icon" title="Help — how to use the CMMS portal" aria-label="Help">?</button>
     <span class="user-chip"><?= htmlspecialchars($user['full_name']) ?> <span class="role-mini">· <?= htmlspecialchars($user['role']) ?></span></span>
     <a class="btn btn-ghost" href="index.php" target="_self" title="Back to fault tracker">↩ Back</a>
   </div>
