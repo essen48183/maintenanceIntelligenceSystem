@@ -1,0 +1,14 @@
+config/config.php
+config/secrets.php
+db/backups/*.sql
+db/backups/*.sql.gz
+docs/library/*
+!docs/library/.gitkeep
+.DS_Store
+vendor/
+composer.lock
+.phpunit.result.cache
+*.log
+.env
+.env.*
+node_modules/
