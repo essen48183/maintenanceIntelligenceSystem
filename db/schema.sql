@@ -9,6 +9,7 @@ DROP TABLE IF EXISTS fault_occurrences;
 DROP TABLE IF EXISTS fault_affected_systems;
 DROP TABLE IF EXISTS fault_diagnostic_questions;
 DROP TABLE IF EXISTS fault_reference_documents;
+DROP TABLE IF EXISTS fault_tasks;
 DROP TABLE IF EXISTS fault_catalog;
 DROP TABLE IF EXISTS aircraft_tails;
 DROP TABLE IF EXISTS systems;
@@ -211,6 +212,34 @@ CREATE TABLE ticket_events (
   CONSTRAINT fk_te_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
   INDEX idx_te_ticket (ticket_id),
   INDEX idx_te_when (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Per-fault tasklist. Created implicitly — every fault has a list; rows added on demand.
+-- Tasks may be authored by a tech or by the AI assistant (source column).
+CREATE TABLE fault_tasks (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  fault_id INT UNSIGNED NOT NULL,
+  ticket_id INT UNSIGNED DEFAULT NULL,            -- optional linkage to an aircraft-specific ticket
+  title VARCHAR(500) NOT NULL,
+  description TEXT,
+  status ENUM('pending','in_progress','blocked','complete') NOT NULL DEFAULT 'pending',
+  holdup_reason VARCHAR(255) DEFAULT NULL,        -- only when status='blocked' (e.g., "awaiting part")
+  source ENUM('user','ai') NOT NULL DEFAULT 'user',
+  task_order INT UNSIGNED NOT NULL DEFAULT 0,
+  created_by INT UNSIGNED DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_by INT UNSIGNED DEFAULT NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  completed_by INT UNSIGNED DEFAULT NULL,         -- sign-off
+  completed_at DATETIME DEFAULT NULL,
+  CONSTRAINT fk_ftask_fault   FOREIGN KEY (fault_id)     REFERENCES fault_catalog(id) ON DELETE CASCADE,
+  CONSTRAINT fk_ftask_ticket  FOREIGN KEY (ticket_id)    REFERENCES tickets(id)       ON DELETE SET NULL,
+  CONSTRAINT fk_ftask_creator FOREIGN KEY (created_by)   REFERENCES users(id)         ON DELETE SET NULL,
+  CONSTRAINT fk_ftask_updater FOREIGN KEY (updated_by)   REFERENCES users(id)         ON DELETE SET NULL,
+  CONSTRAINT fk_ftask_signer  FOREIGN KEY (completed_by) REFERENCES users(id)         ON DELETE SET NULL,
+  INDEX idx_ftask_fault (fault_id),
+  INDEX idx_ftask_status (status),
+  INDEX idx_ftask_ticket (ticket_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- AI assistant conversation messages, scoped to a ticket so handoffs see prior chat

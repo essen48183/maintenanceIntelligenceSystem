@@ -37,6 +37,31 @@
       });
     },
     async aiHistory(faultId) { return jfetch(`api/ai.php?action=history&fault_id=${faultId}`); },
+    async tasksList(faultId) { return jfetch(`api/tasks.php?action=list&fault_id=${faultId}`); },
+    async taskAdd(faultId, title, ticketId) {
+      return jfetch('api/tasks.php?action=add', {
+        method: 'POST',
+        body: JSON.stringify({ fault_id: faultId, title, ticket_id: ticketId || null }),
+      });
+    },
+    async taskStatus(taskId, status, holdup) {
+      return jfetch('api/tasks.php?action=status', {
+        method: 'POST',
+        body: JSON.stringify({ task_id: taskId, status, holdup: holdup || null }),
+      });
+    },
+    async taskDelete(taskId) {
+      return jfetch('api/tasks.php?action=delete', {
+        method: 'POST',
+        body: JSON.stringify({ task_id: taskId }),
+      });
+    },
+    async taskSuggest(faultId) {
+      return jfetch('api/tasks.php?action=suggest', {
+        method: 'POST',
+        body: JSON.stringify({ fault_id: faultId }),
+      });
+    },
   };
 
   async function jfetch(path, opts = {}) {
@@ -263,7 +288,146 @@
     renderDetail(fault);
     renderAiContext(fault);
     loadAiHistory(id);
+    loadTasks(id);
   }
+
+  // ---------- TASKS ----------
+  async function loadTasks(faultId) {
+    try {
+      const { tasks } = await api.tasksList(faultId);
+      renderTasks(tasks);
+    } catch (e) {
+      const list = $('#task-list');
+      if (list) list.innerHTML = `<div class="muted small">Tasks unavailable: ${escapeHTML(e.message)}</div>`;
+    }
+  }
+
+  function renderTasks(tasks) {
+    const list = $('#task-list');
+    if (!list) return;
+    if (!tasks || !tasks.length) {
+      list.innerHTML = '<div class="muted small task-empty">No tasks yet. Add one below or click <strong>✦ AI suggest</strong> to generate a starting list.</div>';
+      return;
+    }
+    list.innerHTML = tasks.map(renderTaskRow).join('');
+    // Wire up the per-row controls
+    $$('.task-row', list).forEach(row => {
+      const id = Number(row.dataset.id);
+      const cb = $('.task-check', row);
+      if (cb) cb.addEventListener('click', () => {
+        const target = row.classList.contains('status-complete') ? 'pending' : 'complete';
+        changeTaskStatus(id, target);
+      });
+      $$('.task-action', row).forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          const next = btn.dataset.status;
+          if (next === 'blocked') {
+            const reason = prompt('What is the holdup? (e.g., awaiting part, awaiting inspection, awaiting NDT)');
+            if (reason === null) return;
+            changeTaskStatus(id, 'blocked', reason);
+          } else if (next === 'delete') {
+            if (!confirm('Remove this task?')) return;
+            deleteTask(id);
+          } else {
+            changeTaskStatus(id, next);
+          }
+        });
+      });
+    });
+  }
+
+  function renderTaskRow(t) {
+    const checked = t.status === 'complete';
+    const statusClass = `status-${t.status}`;
+    const sourceTag = t.source === 'ai'
+      ? '<span class="task-source ai" title="Suggested by AI">✦ AI</span>'
+      : '';
+    let signoff = '';
+    if (t.status === 'complete' && t.completed_by_name) {
+      signoff = `<span class="task-signoff">Signed off by <strong>${escapeHTML(t.completed_by_name)}</strong>${t.completed_by_role ? ' · ' + escapeHTML(t.completed_by_role) : ''} · ${formatDate(t.completed_at)} ${formatTime(t.completed_at)}</span>`;
+    }
+    let holdup = '';
+    if (t.status === 'blocked' && t.holdup_reason) {
+      holdup = `<span class="task-holdup">⚠ Holdup: <strong>${escapeHTML(t.holdup_reason)}</strong></span>`;
+    }
+    const actions = `
+      <div class="task-actions">
+        ${t.status !== 'in_progress' && t.status !== 'complete' ? '<button class="task-action" data-status="in_progress" title="Mark in progress">▶</button>' : ''}
+        ${t.status !== 'blocked'    && t.status !== 'complete' ? '<button class="task-action" data-status="blocked"     title="Mark blocked / holdup">⚠</button>' : ''}
+        ${t.status === 'blocked'    ? '<button class="task-action" data-status="pending"  title="Clear holdup">↺</button>' : ''}
+        <button class="task-action danger" data-status="delete" title="Remove task">✕</button>
+      </div>`;
+    return `
+      <div class="task-row ${statusClass}" data-id="${t.id}">
+        <button class="task-check" aria-label="${checked ? 'Mark incomplete' : 'Mark complete'}">${checked ? '✓' : ''}</button>
+        <div class="task-body">
+          <div class="task-title-row">
+            <span class="task-title">${escapeHTML(t.title)}</span>
+            ${sourceTag}
+            <span class="task-status-pill task-${t.status}">${t.status.replace('_',' ')}</span>
+          </div>
+          ${t.description ? `<div class="task-desc">${escapeHTML(t.description)}</div>` : ''}
+          ${signoff}
+          ${holdup}
+        </div>
+        ${actions}
+      </div>`;
+  }
+
+  async function changeTaskStatus(taskId, status, holdup) {
+    try {
+      const { tasks } = await api.taskStatus(taskId, status, holdup);
+      renderTasks(tasks);
+    } catch (e) {
+      alert('Failed: ' + (e.payload?.error || e.message));
+    }
+  }
+
+  async function deleteTask(taskId) {
+    try {
+      await api.taskDelete(taskId);
+      loadTasks(state.activeFault);
+    } catch (e) {
+      alert('Failed: ' + (e.payload?.error || e.message));
+    }
+  }
+
+  document.addEventListener('submit', async (e) => {
+    if (e.target && e.target.id === 'task-add') {
+      e.preventDefault();
+      const inp = $('#task-add-input');
+      const title = inp.value.trim();
+      if (!title || !state.activeFault) return;
+      inp.disabled = true;
+      try {
+        const { tasks } = await api.taskAdd(state.activeFault, title);
+        inp.value = '';
+        renderTasks(tasks);
+      } catch (e2) {
+        alert('Failed to add: ' + (e2.payload?.error || e2.message));
+      } finally {
+        inp.disabled = false; inp.focus();
+      }
+    }
+  });
+
+  document.addEventListener('click', async (e) => {
+    if (e.target && e.target.id === 'ai-suggest-btn') {
+      const btn = e.target;
+      if (!state.activeFault) return;
+      btn.disabled = true; btn.textContent = '✦ thinking…';
+      try {
+        const { tasks, live } = await api.taskSuggest(state.activeFault);
+        renderTasks(tasks);
+        if (!live) console.info('[mis] AI suggest used stub responses (set anthropic.api_key to go live).');
+      } catch (e2) {
+        alert('AI suggest failed: ' + (e2.payload?.error || e2.message));
+      } finally {
+        btn.disabled = false; btn.textContent = '✦ AI suggest';
+      }
+    }
+  });
 
   function renderDetail(f) {
     const lastSeen = f.recent_occurrences[0]?.occurred_at
@@ -306,7 +470,18 @@
           </div>
         </div>
         <div>
-          <div class="detail-block">
+          <div class="detail-block" id="tasks-block">
+            <div class="block-head">
+              <h4>TASKS</h4>
+              <button class="ai-suggest-btn" id="ai-suggest-btn" data-requires-write title="Ask the AI to propose tasks">✦ AI suggest</button>
+            </div>
+            <div class="task-list" id="task-list"><div class="muted small">Loading…</div></div>
+            <form class="task-add" id="task-add" data-requires-write>
+              <input type="text" id="task-add-input" placeholder="+ Add task (e.g., Pull MDC fault history)" maxlength="500">
+              <button type="submit" class="btn-tiny">Add</button>
+            </form>
+          </div>
+          <div class="detail-block" style="margin-top:14px;">
             <h4>DIAGNOSTIC QUESTIONS</h4>
             <div class="dq-list">
               ${(f.diagnostic_questions || []).map((q, i) => `

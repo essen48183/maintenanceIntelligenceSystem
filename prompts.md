@@ -144,6 +144,29 @@ palette below was sourced from Delta's published brand identity.)
 | UX cue | Topbar shows the user's role; readonly users see a "READ ONLY" pill so they understand why mutation buttons are absent. |
 | Seed data | Two real readonly personas added to seed: a CRJ-900 line pilot and a Tech Ops corporate director, alongside the generic `viewer` placeholder. |
 
+### Prompt 7 — Essen Davis
+
+> when you click on an individual issue i want there to be a tasklist. this
+> tasklist is created blank for each issue by default and both ai and the
+> user with appropriate permissions can add to or check off completed
+> tasks. it should be easy to have a way to complete some tasks and
+> indicate who siged them off and also to add what is a holdup (awaiting a
+> part, awaing inspection, etc) maybe have that tasklist entry point above
+> the diagnostic questions and reference documents.
+
+**Decisions captured:**
+
+| Topic | Decision |
+|---|---|
+| Tasklist scope | Per-fault (per "issue"). Created implicitly — every fault has a tasklist that starts empty; rows are created on demand. Optional `ticket_id` linkage so tasks can be associated with a specific aircraft event when one exists. |
+| Statuses | `pending` · `in_progress` · `blocked` · `complete`. A `blocked` task carries a free-text `holdup_reason` (e.g., "awaiting part", "awaiting inspection"). |
+| Sign-off | Completing a task records `completed_by` + `completed_at` on the row. The signer is shown next to the task in the UI; the audit log keeps a separate immutable record. |
+| Source | Each task is tagged `user` or `ai` so the team can tell at a glance which steps came from the diagnostic assistant. |
+| AI integration | A "Suggest tasks" button on each fault asks Claude to produce 3–5 fault-specific troubleshooting steps and inserts them as `source='ai'`, `status='pending'` tasks ready for a tech to claim. |
+| Permissions | View: all authenticated users (incl. readonly — pilots and corporate can see progress). Add / check-off / block / change: write roles only (admin, supervisor, maintenance). |
+| Position in UI | Right column of the fault detail panel, **above** Diagnostic Questions and Reference Documents (per the prompt). |
+| Audit & handoff | Every task mutation writes an `audit_log` row and, if the task is linked to a ticket, a `ticket_events` entry — so a supervisor reviewing the ticket on the next shift sees exactly what was done. |
+
 ---
 
 ## How to use this file

@@ -154,3 +154,13 @@ INSERT INTO ticket_events (ticket_id, user_id, event_type, body, metadata, creat
   (3, 5, 'status_changed', 'Status changed to on_hold pending parts.',
                         JSON_OBJECT('from','open','to','on_hold'),
                         '2026-05-07 04:35:00');
+
+-- Sample fault tasks demonstrating user-authored, AI-suggested, completed, and blocked states
+INSERT INTO fault_tasks
+  (fault_id, ticket_id, title, status, holdup_reason, source, task_order, created_by, created_at, completed_by, completed_at)
+VALUES
+  (1, 1, 'Pull MDC fault history for FCC L and R',                'complete', NULL,                              'user', 10, 3, '2026-05-08 11:00:00', 3, '2026-05-08 13:30:00'),
+  (1, 1, 'Verify FCC software part numbers vs SB A-22-31-47',     'in_progress', NULL,                           'user', 20, 4, '2026-05-08 16:00:00', NULL, NULL),
+  (1, 1, 'Order replacement FCC LRU if SB not yet applied',       'blocked',  'Awaiting part — backorder ETA 48h','user', 30, 4, '2026-05-08 16:30:00', NULL, NULL),
+  (1, NULL, 'Inspect pitch and roll servo for binding',           'pending',  NULL,                              'ai',   40, NULL, '2026-05-08 16:35:00', NULL, NULL),
+  (1, NULL, 'Cross-check with Primus Elite avionics fault code 47-22 occurrences', 'pending', NULL,              'ai',   50, NULL, '2026-05-08 16:35:00', NULL, NULL);
