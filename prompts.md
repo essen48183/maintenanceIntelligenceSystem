@@ -357,6 +357,76 @@ but clearly tagged `SKELETON · wiring in a later phase`:
 - RTS workflow with `rts_authority` and `inspection_authority` user attributes.
 - Reference-document opening in independent windows so techs can stack PDFs across screens.
 
+### Prompt 15 — Essen Davis (closing-day constraints, 2026-05-10)
+
+> ai should never be able to complate tasks by itself. you can't hold ai
+> accountable for errors. this is a foundational constraint. and yes, we
+> work in delta mainenance and this is our work. it is to be shown to
+> superiors and nowehere else if we go ahead. and a ticket that is per
+> model should exend out and be completed per airframe.
+
+Three closing decisions captured for tomorrow:
+
+#### 1. AI accountability — foundational constraint
+
+**Rule:** the AI assistant **never** completes a task, signs off a PM
+item, returns an aircraft to service, or closes a ticket. It can only:
+
+- *suggest* tasks (currently tagged `source='ai'`, always created in
+  `status='pending'`)
+- *answer* diagnostic questions
+- *propose* documentation language for a tech to review
+
+A human is always the actor of record on any state change that affects
+airworthiness. **Why:** the AI cannot be held accountable for an error;
+a certified tech / supervisor can. This is not a UX preference — it is
+a regulatory and ethical floor.
+
+**Current code already complies** (AI suggestions land as pending, no
+endpoint lets the AI call mutating actions), but this constraint
+should be re-checked on every future feature that involves the AI.
+Adding it here so it's load-bearing in the prompts log.
+
+#### 2. Project context — authorized Delta work
+
+This is real Delta Air Lines maintenance work being built by Delta
+maintenance personnel. Distribution is **internal to leadership only**
+until a go/no-go decision. Branding (Delta Air Lines, Endeavor Air,
+Tech Ops marks) is therefore appropriate, not a placeholder. Removes
+the earlier "swap the marks before showing it around" caveat.
+
+#### 3. Ticket model — per-model with per-airframe execution
+
+**Rethink for next session.** Today's schema has `tickets.tail_id`
+pointing at a single aircraft. The user wants a ticket to live at the
+**fault-model level** and *extend out* to be completed per affected
+airframe.
+
+Two viable shapes to discuss tomorrow before coding:
+
+| Option | Shape | Pros | Cons |
+|---|---|---|---|
+| A — parent ticket + per-tail children | `tickets.parent_id`; one parent per fault model, child rows per affected tail | Each tail can have its own assignee, status, signoff; clean reporting | Doubles the row count; UI has to show parent vs child |
+| B — one ticket + `ticket_tails` join | Single ticket with a join table `(ticket_id, tail_id, status, assigned_to, signed_off_by, signed_off_at)` | Smaller schema delta; one parent UI | Harder to assign per-tail and harder to express per-tail history |
+
+Lean toward A — child tickets reuse all existing per-ticket behavior
+(events, AI chat, timeline) without special-casing. The parent
+becomes a roll-up view with a per-tail status grid.
+
+**Implications to chew on:**
+- Tasks today are per-fault. Under the new model, do tasks belong to
+  the parent (shared across all tails) or to each child (per-tail
+  execution checklist)? Mixed (parent = strategy, child = execution
+  checklist) is probably the truth.
+- "Ticket closed" only when **every** child is signed off.
+- Parent ticket auto-creates a child the first time a tail is added
+  to the affected list (from a new occurrence) — saves manual work.
+- The dashboard's "ACTIVE ISSUES" list keeps showing the parent;
+  expanding it shows per-tail rollup.
+
+Not implementing tonight — this is a real schema change and deserves
+a sit-down decision. Captured here so we open with it in the morning.
+
 ---
 
 ## How to use this file
