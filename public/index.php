@@ -34,8 +34,8 @@ $base = rtrim((string)($cfg['app']['base_url'] ?? ''), '/');
       <div class="brand">
         <span class="brand-mark" aria-hidden="true"></span>
         <div class="brand-text">
-          <span class="brand-line-1">DELTA</span>
-          <span class="brand-line-2">TECH OPS</span>
+          <span class="brand-line-1">ENDEAVOR</span>
+          <span class="brand-line-2">AIR</span>
         </div>
       </div>
       <h1>Maintenance Intelligence System</h1>
@@ -57,8 +57,8 @@ $base = rtrim((string)($cfg['app']['base_url'] ?? ''), '/');
     <div class="topbar-left">
       <span class="brand-mark"></span>
       <div class="brand-text">
-        <span class="brand-line-1">DELTA</span>
-        <span class="brand-line-2">TECH OPS</span>
+        <span class="brand-line-1">ENDEAVOR</span>
+        <span class="brand-line-2">AIR</span>
       </div>
       <div class="app-title">
         <span class="title-main">CRJ FAULT TRACKER</span>
@@ -155,7 +155,7 @@ $base = rtrim((string)($cfg['app']['base_url'] ?? ''), '/');
 
   <footer class="footer" hidden>
     <span class="footer-mark"></span>
-    <span class="footer-tag">DELTA TECH OPS</span>
+    <span class="footer-tag">ENDEAVOR AIR</span>
     <span class="footer-sep">•</span>
     <span>CONFIDENTIAL</span>
     <span class="footer-sep">•</span>

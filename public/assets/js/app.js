@@ -439,17 +439,6 @@
             </div>
           </div>
           <div class="detail-block" style="margin-top:14px;">
-            <h4>DIAGNOSTIC QUESTIONS</h4>
-            <div class="dq-list">
-              ${(f.diagnostic_questions || []).map((q, i) => `
-                <div class="dq" data-q="${escapeAttr(q.question)}">
-                  <span class="num">${i+1}</span>
-                  <span class="q">${escapeHTML(q.question)}</span>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-          <div class="detail-block" style="margin-top:14px;">
             <h4>REFERENCE DOCUMENTS</h4>
             <div class="refdocs">
               ${(f.reference_documents || []).map(d => `
@@ -468,13 +457,6 @@
       </div>`;
     $('#detail-card').innerHTML = html;
 
-    // Diagnostic question → push into AI input
-    $$('#detail-card .dq').forEach(d => {
-      d.addEventListener('click', () => {
-        $('#ai-input').value = d.dataset.q;
-        $('#ai-input').focus();
-      });
-    });
     // Reference docs → open in their own window so you can stack them across screens
     $$('#detail-card .refdoc').forEach(a => {
       a.addEventListener('click', e => {

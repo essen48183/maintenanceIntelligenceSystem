@@ -87,8 +87,8 @@ if ($resolved && $basePath && str_starts_with($resolved, $basePath) && is_file($
   <div class="cmms-topbar-left">
     <span class="brand-mark"></span>
     <div class="brand-text">
-      <span class="brand-line-1">DELTA</span>
-      <span class="brand-line-2">TECH OPS</span>
+      <span class="brand-line-1">ENDEAVOR</span>
+      <span class="brand-line-2">AIR</span>
     </div>
     <div class="cmms-title">
       <span class="cmms-eyebrow">HELP &amp; DOCUMENTATION</span>

@@ -219,6 +219,11 @@ The schema is portable; nothing assumes MAMP at runtime.
 
 - `prompts.md` — running log of user prompts and the resulting design
   decisions. Read it for the *why* behind the architecture.
+- [`docs/ai-role.md`](docs/ai-role.md) — what the AI is *for* in this
+  product: authority order of reference docs, the systems it will
+  eventually unify (SABER, manufacturer manuals, Veryon), and the
+  deferred-repair workflow. Read this before designing prompts or
+  retrieval pipelines.
 - `docs/guide/` — end-user documentation:
   - [`how-to-install.md`](docs/guide/how-to-install.md) — first-time MAMP setup
   - [`how-to-migrate.md`](docs/guide/how-to-migrate.md) — moving off MAMP onto a host
